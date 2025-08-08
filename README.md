@@ -1,12 +1,19 @@
 # Alarmmonitor JRK
 
-Webbasierter Alarmmonitor und Leitstellen-Simulator auf Basis von FastAPI.
+Komplettlösung für einen webbasierten Alarmmonitor und ein Leitstellen-Interface.
 
 ## Features
-- FastAPI Backend mit REST- und WebSocket-Schnittstellen
-- Verwaltung von Fahrzeugen und Einsätzen in SQLite (`data/app.db`)
-- Zwei Weboberflächen: Leitstelle (`/`) und Monitor (`/monitor`)
-- Alarmgong und optionale Sprachausgabe
+- Anzeige und Verwaltung von Fahrzeugen mit deutschen Rettungsdienst-Statuscodes
+- Leitstellenoberfläche zum Setzen von Status, Alarmtext und Einsatzort
+- Farbige Darstellung der Status für schnelle Übersicht
+- Persistente Speicherung der Fahrzeugdaten in `data/vehicles.json`
+- Alarmgong und Sprachausgabe des Alarmtextes bei neuen Einsätzen
+- Installationsskript für virtuelle Umgebung und Startskript
+
+### Alarmgong hinzufügen
+
+Die Audiodatei ist aus dem Repository ausgeschlossen. Lege eine passende
+`gong.wav` unter `static/` ab, damit der Alarmton abgespielt wird.
 
 ## Installation
 ```bash
@@ -19,7 +26,5 @@ Webbasierter Alarmmonitor und Leitstellen-Simulator auf Basis von FastAPI.
 ```
 
 Anschließend erreichbar unter:
-- Leitstelle: http://localhost:8080/
-- Alarmmonitor: http://localhost:8080/monitor
-
-Lege eine Audiodatei `gong1.mp3` unter `app/assets/sounds/` ab, damit der Alarmton abgespielt wird.
+- Alarmmonitor: http://localhost:5000/
+- Leitstelle: http://localhost:5000/dispatch
