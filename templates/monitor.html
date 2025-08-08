@@ -129,7 +129,7 @@ function speak(text) {
         enableBtn.style.display = '';
         return;
     }
-    const url = `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=tw-ob&tl=de&q=${encodeURIComponent(t)}`;
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=de&q=${encodeURIComponent(t)}`;
     ttsEl.src = url;
     ttsEl.play().catch(err => console.error(err));
 }
