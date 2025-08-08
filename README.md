@@ -8,6 +8,8 @@ Komplettlösung für einen webbasierten Alarmmonitor und ein Leitstellen-Interfa
 - Farbige Darstellung der Status für schnelle Übersicht
 - Persistente Speicherung der Fahrzeugdaten in `data/vehicles.json`
 - Alarmgong und Sprachausgabe des Alarmtextes bei neuen Einsätzen
+- Fahrzeugverwaltung zum Hinzufügen und Entfernen von Einheiten
+- Einsatzdokumentation in `data/incidents.json` mit Übersicht im Webinterface
 - Installationsskript für virtuelle Umgebung und Startskript
 
 ### Alarmgong hinzufügen
@@ -28,3 +30,5 @@ Die Audiodatei ist aus dem Repository ausgeschlossen. Lege eine passende
 Anschließend erreichbar unter:
 - Alarmmonitor: http://localhost:5000/
 - Leitstelle: http://localhost:5000/dispatch
+- Fahrzeugverwaltung: http://localhost:5000/vehicles
+- Einsatzdokumentation: http://localhost:5000/incidents

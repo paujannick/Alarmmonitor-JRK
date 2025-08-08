@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1 class="mb-4">Einsatzdokumentation</h1>
+<table class="table table-striped">
+  <thead>
+    <tr><th>ID</th><th>Zeit</th><th>Fahrzeug</th><th>Text</th><th>Ort</th><th>Status</th></tr>
+  </thead>
+  <tbody>
+  {% for inc in incidents %}
+    <tr>
+      <td>{{ inc.id }}</td>
+      <td>{{ inc.time }}</td>
+      <td>{{ inc.unit }}</td>
+      <td>{{ inc.note }}</td>
+      <td>{{ inc.location }}</td>
+      <td>{{ inc.status }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

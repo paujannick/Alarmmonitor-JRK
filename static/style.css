@@ -7,3 +7,4 @@ body { font-family: Arial, sans-serif; }
 .status-4 { background-color: #ffeeba; }
 .status-5 { background-color: #cfe2ff; }
 .status-6 { background-color: #e2e3e5; }
+#latest-incident { display:none; }

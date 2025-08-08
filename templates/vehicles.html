@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1 class="mb-4">Fahrzeugverwaltung</h1>
+<form id="add-vehicle" class="row g-3 mb-4">
+  <div class="col-md-6">
+    <label class="form-label">Fahrzeugname</label>
+    <input type="text" name="unit" class="form-control" required>
+  </div>
+  <div class="col-12">
+    <button type="submit" class="btn btn-primary">Hinzufügen</button>
+  </div>
+</form>
+<table class="table table-striped" id="vehicle-list">
+  <thead>
+    <tr><th>Name</th><th>Status</th><th>Aktion</th></tr>
+  </thead>
+  <tbody>
+  {% for name, info in vehicles.items() %}
+    <tr data-unit="{{ name }}">
+      <td>{{ name }}</td>
+      <td>{{ info.status }}</td>
+      <td><button class="btn btn-sm btn-danger delete">Löschen</button></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
+{% block scripts %}
+<script>
+const form = document.getElementById('add-vehicle');
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(form).entries());
+  const res = await fetch('/api/vehicles', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+  const r = await res.json();
+  if (r.ok) {
+    location.reload();
+  }
+});
+
+document.querySelectorAll('#vehicle-list .delete').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    const unit = e.target.closest('tr').dataset.unit;
+    const res = await fetch(`/api/vehicles/${unit}`, {method:'DELETE'});
+    const r = await res.json();
+    if (r.ok) {
+      e.target.closest('tr').remove();
+    }
+  });
+});
+</script>
+{% endblock %}
