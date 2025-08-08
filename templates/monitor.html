@@ -21,6 +21,7 @@
                 <th>Status</th>
                 <th>Hinweis</th>
                 <th>Ort</th>
+                <th>Farbe</th>
             </tr>
         </thead>
         <tbody>
@@ -31,6 +32,7 @@
                 <td class="status-text">{{ info.status }} - {{ status_text[info.status] }}</td>
                 <td class="note">{{ info.note }}</td>
                 <td class="location">{{ info.location }}</td>
+                <td class="status-color-cell"><span class="status-color"></span></td>
             </tr>
         {% endfor %}
         </tbody>
@@ -76,9 +78,12 @@ function unlockAudio() {
     alarmSound.play().then(() => {
         alarmSound.pause();
         alarmSound.currentTime = 0;
-    }).catch(() => {});
-    audioUnlocked = true;
-    enableBtn.style.display = 'none';
+        audioUnlocked = true;
+        enableBtn.style.display = 'none';
+    }).catch(() => {
+        audioUnlocked = false;
+        enableBtn.style.display = '';
+    });
 }
 enableBtn.addEventListener('click', unlockAudio, {once: true});
 document.addEventListener('touchstart', unlockAudio, {once: true});
@@ -135,14 +140,15 @@ updateDateTime();
 function speak(text) {
     const t = (text || '').trim();
     if (!t) return Promise.resolve();
-    if ('speechSynthesis' in window) {
-        return new Promise(resolve => {
-            const utterance = new SpeechSynthesisUtterance(t);
-            utterance.lang = 'de-DE';
-            utterance.onend = resolve;
-            window.speechSynthesis.speak(utterance);
-        });
-    }
+      if ('speechSynthesis' in window) {
+          return new Promise(resolve => {
+              const utterance = new SpeechSynthesisUtterance(t);
+              utterance.lang = 'de-DE';
+              utterance.onend = resolve;
+              utterance.onerror = resolve;
+              window.speechSynthesis.speak(utterance);
+          });
+      }
     if (!audioUnlocked) {
         enableBtn.style.display = '';
         return Promise.resolve();
@@ -172,11 +178,14 @@ function triggerAlarm(unit, info) {
         alarmProcessing = true;
         if (audioUnlocked) {
             alarmSound.currentTime = 0;
-            alarmSound.play().catch(() => {});
-            alarmSound.onended = () => {
-                alarmSound.onended = null;
+            alarmSound.play().then(() => {
+                alarmSound.onended = () => {
+                    alarmSound.onended = null;
+                    processAlarmQueue();
+                };
+            }).catch(() => {
                 processAlarmQueue();
-            };
+            });
         } else {
             enableBtn.style.display = '';
             processAlarmQueue();

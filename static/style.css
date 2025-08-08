@@ -20,6 +20,29 @@ body {
   background-color: #4d2121;
 }
 
+.status-color {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+
+tr.status-0 .status-color,
+tr.status-1 .status-color,
+tr.status-2 .status-color {
+  background-color: #214d21;
+}
+
+tr.status-3 .status-color,
+tr.status-4 .status-color,
+tr.status-5 .status-color,
+tr.status-6 .status-color,
+tr.status-7 .status-color,
+tr.status-8 .status-color,
+tr.status-9 .status-color {
+  background-color: #4d2121;
+}
+
 #latest-incident {
   display: none;
 }
