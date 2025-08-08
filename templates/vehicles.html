@@ -3,24 +3,24 @@
 <h1 class="mb-4">Fahrzeugverwaltung</h1>
 <form id="add-vehicle" class="row g-3 mb-4">
   <div class="col-md-3">
-    <label class="form-label">Kurzname</label>
-    <input type="text" name="unit" class="form-control" required>
+    <label class="form-label" for="vehicle-unit">Kurzname</label>
+    <input type="text" name="unit" id="vehicle-unit" class="form-control" required>
   </div>
   <div class="col-md-3">
-    <label class="form-label">Name</label>
-    <input type="text" name="name" class="form-control">
+    <label class="form-label" for="vehicle-name">Name</label>
+    <input type="text" name="name" id="vehicle-name" class="form-control">
   </div>
   <div class="col-md-3">
-    <label class="form-label">Funkrufname</label>
-    <input type="text" name="callsign" class="form-control">
+    <label class="form-label" for="vehicle-callsign">Funkrufname</label>
+    <input type="text" name="callsign" id="vehicle-callsign" class="form-control">
   </div>
   <div class="col-md-3">
-    <label class="form-label">Besatzung (kommagetrennt)</label>
-    <input type="text" name="crew" class="form-control">
+    <label class="form-label" for="vehicle-crew">Besatzung (kommagetrennt)</label>
+    <input type="text" name="crew" id="vehicle-crew" class="form-control">
   </div>
   <div class="col-md-3">
-    <label class="form-label">Sprachausgabe</label>
-    <input type="text" name="tts" class="form-control">
+    <label class="form-label" for="vehicle-tts">Sprachausgabe</label>
+    <input type="text" name="tts" id="vehicle-tts" class="form-control">
   </div>
   <div class="col-12">
     <button type="submit" class="btn btn-primary">Hinzufügen</button>
@@ -42,7 +42,8 @@
       <td class="icon-cell">
         {% if info.icon %}<img src="{{ url_for('static', filename=info.icon) }}" height="32" class="mb-1">{% endif %}
         <form class="icon-form" enctype="multipart/form-data">
-          <input type="file" name="icon" accept="image/*" class="form-control form-control-sm mb-1">
+          <label class="form-label visually-hidden" for="icon-{{ loop.index }}">Icon</label>
+          <input type="file" name="icon" id="icon-{{ loop.index }}" accept="image/*" class="form-control form-control-sm mb-1">
           <button class="btn btn-sm btn-secondary">Upload</button>
         </form>
       </td>

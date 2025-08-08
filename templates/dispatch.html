@@ -4,16 +4,16 @@
 <h2>Status ändern</h2>
 <form id="dispatch-form" class="row g-3 mb-4">
     <div class="col-md-4">
-        <label class="form-label">Fahrzeug</label>
-        <select name="unit" class="form-select">
+        <label class="form-label" for="dispatch-unit">Fahrzeug</label>
+        <select name="unit" id="dispatch-unit" class="form-select">
             {% for name in vehicles.keys() %}
             <option value="{{ name }}">{{ name }}</option>
             {% endfor %}
         </select>
     </div>
     <div class="col-md-4">
-        <label class="form-label">Status</label>
-        <select name="status" class="form-select">
+        <label class="form-label" for="dispatch-status">Status</label>
+        <select name="status" id="dispatch-status" class="form-select">
             {% for code, text in status_text.items() %}
             <option value="{{ code }}">{{ code }} - {{ text }}</option>
             {% endfor %}
@@ -77,13 +77,13 @@
         <form id="incident-form">
           <input type="hidden" name="id">
           <div class="mb-3">
-            <label class="form-label">Start</label>
-            <input type="text" name="start" class="form-control" readonly>
+            <label class="form-label" for="incident-start">Start</label>
+            <input type="text" name="start" id="incident-start" class="form-control" readonly>
           </div>
           <h6>Einsatzdaten</h6>
           <div class="mb-3">
-            <label class="form-label">Vorlage</label>
-            <select name="template" class="form-select">
+            <label class="form-label" for="incident-template">Vorlage</label>
+            <select name="template" id="incident-template" class="form-select">
               <option value="">--</option>
               <option value="bma">Brandmeldeanlage</option>
               <option value="vu">Verkehrsunfall</option>
@@ -91,16 +91,16 @@
             </select>
           </div>
           <div class="mb-3">
-            <label class="form-label">Stichwort</label>
-            <input type="text" name="keyword" class="form-control">
+            <label class="form-label" for="incident-keyword">Stichwort</label>
+            <input type="text" name="keyword" id="incident-keyword" class="form-control">
           </div>
           <div class="mb-3">
-            <label class="form-label">Ort</label>
-            <input type="text" name="location" class="form-control">
+            <label class="form-label" for="incident-location">Ort</label>
+            <input type="text" name="location" id="incident-location" class="form-control">
           </div>
           <div class="mb-3">
-            <label class="form-label">Priorität</label>
-            <select name="priority" class="form-select">
+            <label class="form-label" for="incident-priority">Priorität</label>
+            <select name="priority" id="incident-priority" class="form-select">
               <option value="">--</option>
               <option value="R0">R0</option>
               <option value="R1">R1</option>
@@ -109,8 +109,8 @@
             </select>
           </div>
           <div class="mb-3">
-            <label class="form-label">Patient</label>
-            <input type="text" name="patient" class="form-control">
+            <label class="form-label" for="incident-patient">Patient</label>
+            <input type="text" name="patient" id="incident-patient" class="form-control">
           </div>
           <h6>Fahrzeugzuordnung</h6>
           <div class="mb-3">
@@ -121,9 +121,9 @@
             </div>
           {% endfor %}
           </div>
-          <h6>Notiz</h6>
           <div class="mb-3">
-            <textarea name="note" class="form-control" rows="3"></textarea>
+            <label class="form-label" for="incident-note">Notiz</label>
+            <textarea name="note" id="incident-note" class="form-control" rows="3"></textarea>
           </div>
         </form>
       </div>
