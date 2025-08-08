@@ -38,6 +38,7 @@ DEFAULT_VEHICLES = {
         'icon': None,
         'tts': '',
         'base': '',
+        'alarm': None,
     },
     'RTW2': {
         'name': 'Rettungswagen 2',
@@ -51,6 +52,7 @@ DEFAULT_VEHICLES = {
         'icon': None,
         'tts': '',
         'base': '',
+        'alarm': None,
     },
     'KTW1': {
         'name': 'Krankentransportwagen 1',
@@ -64,6 +66,7 @@ DEFAULT_VEHICLES = {
         'icon': None,
         'tts': '',
         'base': '',
+        'alarm': None,
     },
 }
 
@@ -97,6 +100,7 @@ def load_vehicles():
                 info.setdefault('icon', None)
                 info.setdefault('tts', '')
                 info.setdefault('base', '')
+                info.setdefault('alarm', None)
             return data
     data = DEFAULT_VEHICLES.copy()
     return data
@@ -515,6 +519,7 @@ def api_alert_incident(inc_id):
                         info['location'] = inc['location']['name']
                         info['lat'] = inc['location']['lat']
                         info['lon'] = inc['location']['lon']
+                        info['alarm'] = datetime.utcnow().isoformat()
             save_incidents()
             save_vehicles()
             return jsonify({'ok': True})
