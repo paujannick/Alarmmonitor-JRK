@@ -78,7 +78,15 @@ def load_vehicles():
     if DATA_FILE.exists():
         with open(DATA_FILE, encoding='utf-8') as f:
             data = json.load(f)
-            for info in data.values():
+            for unit, info in data.items():
+                info.setdefault('name', unit)
+                info.setdefault('callsign', unit)
+                info.setdefault('crew', [])
+                info.setdefault('status', 2)
+                info.setdefault('note', '')
+                info.setdefault('location', '')
+                info.setdefault('lat', None)
+                info.setdefault('lon', None)
                 info.setdefault('icon', None)
             return data
     data = DEFAULT_VEHICLES.copy()
