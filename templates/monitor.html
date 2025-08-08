@@ -101,9 +101,15 @@ document.addEventListener('fullscreenchange', () => {
 function speak(text) {
     const t = (text || '').trim();
     if (!t) return;
-    const url = `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=tw-ob&tl=de&q=${encodeURIComponent(t)}`;
-    const audio = new Audio(url);
-    audio.play().catch(() => {});
+    if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(t);
+        utterance.lang = 'de-DE';
+        window.speechSynthesis.speak(utterance);
+    } else {
+        const url = `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=tw-ob&tl=de&q=${encodeURIComponent(t)}`;
+        const audio = new Audio(url);
+        audio.play().catch(() => {});
+    }
 }
 
 function triggerAlarm(unit, info) {
@@ -115,7 +121,7 @@ function triggerAlarm(unit, info) {
     const text = `${info.note || ''} ${info.location || ''}`.trim() || unit;
     alarmSound.play().catch(() => {});
     alarmSound.onended = () => {
-        speak(text);
+        setTimeout(() => speak(text), 500);
         alarmSound.onended = null;
     };
     latestDiv.innerHTML = `<strong>${unit}</strong> ${text}`;
