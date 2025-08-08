@@ -450,6 +450,7 @@ def api_update_incident(inc_id):
             priority = data.get('priority')
             patient = data.get('patient')
             note = data.get('note')
+            vehicles_req = data.get('vehicles')
             if keyword is not None:
                 inc['keyword'] = keyword
             if loc_name is not None:
@@ -462,6 +463,34 @@ def api_update_incident(inc_id):
                 inc['priority'] = priority
             if patient is not None:
                 inc['patient'] = patient
+            if vehicles_req is not None:
+                old_units = set(inc.get('vehicles', []))
+                new_units = set(vehicles_req)
+                added = new_units - old_units
+                removed = old_units - new_units
+                inc['vehicles'] = list(new_units)
+                now = datetime.utcnow().isoformat()
+                for unit in added:
+                    inc.setdefault('log', []).append({'time': now, 'unit': unit, 'status': 'alarmiert'})
+                    if unit in vehicles:
+                        info = vehicles[unit]
+                        info['note'] = inc['keyword']
+                        info['location'] = inc['location']['name']
+                        info['lat'] = inc['location'].get('lat')
+                        info['lon'] = inc['location'].get('lon')
+                for unit in removed:
+                    if unit in vehicles:
+                        if not any(
+                            other.get('active') and unit in other.get('vehicles', [])
+                            for other in incidents
+                            if other is not inc
+                        ):
+                            info = vehicles[unit]
+                            info['note'] = ''
+                            info['location'] = ''
+                            info['lat'] = None
+                            info['lon'] = None
+                save_vehicles()
             if note:
                 inc.setdefault('notes', []).append({'time': datetime.utcnow().isoformat(), 'text': note})
             save_incidents()
