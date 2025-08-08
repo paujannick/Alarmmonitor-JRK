@@ -4,6 +4,7 @@
 {% endblock %}
 {% block content %}
 <h1 class="mb-4">Alarmmonitor</h1>
+<div id="datetime" class="text-end text-secondary mb-3"></div>
 <button id="fullscreen" class="btn btn-secondary mb-3">Vollbild</button>
 <div id="latest-incident" class="alert alert-danger display-4" style="display:none;"></div>
 <button id="enable-audio" class="btn btn-secondary mb-3">Ton aktivieren</button>
@@ -12,10 +13,10 @@
     <div id="map" style="height:400px;" class="mb-3"></div>
   </div>
   <div class="col-md-6">
-    <table class="table table-striped" id="vehicle-table">
+    <table class="table table-dark table-striped" id="vehicle-table">
         <thead>
             <tr>
-                <th>Fahrzeug</th>
+                <th>Fahrzeug / Funkrufname</th>
                 <th>Icon</th>
                 <th>Status</th>
                 <th>Hinweis</th>
@@ -25,7 +26,7 @@
         <tbody>
         {% for name, info in vehicles.items() %}
             <tr data-unit="{{ name }}" class="status-{{ info.status }}">
-                <td>{{ name }}</td>
+                <td class="unit-cell"><strong>{{ info.name }}</strong><br><small>{{ info.callsign }}</small></td>
                 <td class="icon-cell">{% if info.icon %}<img src="{{ url_for('static', filename=info.icon) }}" height="24">{% endif %}</td>
                 <td class="status-text">{{ info.status }} - {{ status_text[info.status] }}</td>
                 <td class="note">{{ info.note }}</td>
@@ -59,10 +60,12 @@ for (const [unit, info] of Object.entries({{ vehicles|tojson }})) {
 const alarmSound = document.getElementById('alarm');
 const latestDiv = document.getElementById('latest-incident');
 const enableBtn = document.getElementById('enable-audio');
+const fullscreenBtn = document.getElementById('fullscreen');
+const datetimeEl = document.getElementById('datetime');
 let audioUnlocked = false;
 const ttsEl = new Audio();
 let lastAlarmId = null;
-const map = L.map('map').setView([51, 10], 6);
+const map = L.map('map').setView([50.586, 8.675], 12);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '© OpenStreetMap'}).addTo(map);
 const vehicleMarkers = {};
 const incidentMarkers = {};
@@ -83,7 +86,9 @@ function fitMapToAll() {
         ...Object.values(vehicleMarkers),
         ...Object.values(incidentMarkers)
     ].filter(m => m);
-    if (markers.length) {
+    if (Object.keys(incidentMarkers).length === 0) {
+        map.setView([50.586, 8.675], 12);
+    } else if (markers.length) {
         const group = new L.featureGroup(markers);
         map.fitBounds(group.getBounds().pad(0.05));
     }
@@ -100,7 +105,7 @@ function getIcon(unit) {
   if (unit.startsWith('KTW')) return icons.KTW;
   return icons.default;
 }
-document.getElementById('fullscreen').addEventListener('click', () => {
+fullscreenBtn.addEventListener('click', () => {
   if (document.documentElement.requestFullscreen) {
     document.documentElement.requestFullscreen();
   }
@@ -112,10 +117,19 @@ document.addEventListener('fullscreenchange', () => {
   const nav = document.querySelector('nav');
   if (document.fullscreenElement) {
     if (nav) nav.style.display = 'none';
+    fullscreenBtn.style.display = 'none';
   } else {
     if (nav) nav.style.display = '';
+    fullscreenBtn.style.display = '';
   }
 });
+
+function updateDateTime() {
+  const now = new Date();
+  datetimeEl.textContent = now.toLocaleString('de-DE');
+}
+setInterval(updateDateTime, 1000);
+updateDateTime();
 function speak(text) {
     const t = (text || '').trim();
     if (!t) return;
@@ -139,7 +153,8 @@ function triggerAlarm(unit, info) {
     if (alarmId === lastAlarmId) return;
     lastAlarmId = alarmId;
     lastAlarmUnit = unit;
-    const parts = [unit];
+    const callsign = info.callsign || unit;
+    const parts = [`Alarm für ${callsign}`];
     if (info.note) parts.push(info.note);
     if (info.location) parts.push(info.location);
     const speechText = parts.join('. ');
@@ -155,14 +170,14 @@ function triggerAlarm(unit, info) {
         enableBtn.style.display = '';
         speak(speechText);
     }
-    latestDiv.innerHTML = `<strong>${unit}</strong> ${displayText}`;
+    latestDiv.innerHTML = `<strong>${callsign}</strong> ${displayText}`;
     latestDiv.style.display = 'block';
     if (info.lat && info.lon) {
         if (vehicleMarkers[unit]) {
             vehicleMarkers[unit].setLatLng([info.lat, info.lon]);
             vehicleMarkers[unit].setIcon(getIcon(unit));
         } else {
-            vehicleMarkers[unit] = L.marker([info.lat, info.lon], {icon: getIcon(unit)}).addTo(map).bindPopup(unit);
+            vehicleMarkers[unit] = L.marker([info.lat, info.lon], {icon: getIcon(unit)}).addTo(map).bindPopup(callsign);
         }
     }
     fitMapToAll();
@@ -182,6 +197,7 @@ async function refresh() {
             row.querySelector('.status-text').textContent = `${info.status} - ${statusText[info.status]}`;
             row.querySelector('.note').textContent = info.note;
             row.querySelector('.location').textContent = info.location;
+            row.querySelector('.unit-cell').innerHTML = `<strong>${info.name}</strong><br><small>${info.callsign}</small>`;
             const iconCell = row.querySelector('.icon-cell');
             if (info.icon) {
                 iconCell.innerHTML = `<img src="/static/${info.icon}" height="24">`;
@@ -207,7 +223,7 @@ async function refresh() {
                     vehicleMarkers[unit].setLatLng([info.lat, info.lon]);
                     vehicleMarkers[unit].setIcon(getIcon(unit));
                 } else {
-                    vehicleMarkers[unit] = L.marker([info.lat, info.lon], {icon: getIcon(unit)}).addTo(map).bindPopup(unit);
+                    vehicleMarkers[unit] = L.marker([info.lat, info.lon], {icon: getIcon(unit)}).addTo(map).bindPopup(info.callsign || unit);
                 }
             } else if (vehicleMarkers[unit]) {
                 map.removeLayer(vehicleMarkers[unit]);
