@@ -60,6 +60,19 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: 
 const vehicleMarkers = {};
 const incidentMarkers = {};
 const iconBase = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/';
+function unlockAudio() {
+    alarmSound.play().then(() => {
+        alarmSound.pause();
+        alarmSound.currentTime = 0;
+    }).catch(() => {});
+    if ('speechSynthesis' in window) {
+        const utter = new SpeechSynthesisUtterance(' ');
+        utter.lang = 'de-DE';
+        window.speechSynthesis.speak(utter);
+    }
+}
+document.addEventListener('touchstart', unlockAudio, {once: true});
+document.addEventListener('click', unlockAudio, {once: true});
 function fitMapToAll() {
     const markers = [
         ...Object.values(vehicleMarkers),
@@ -101,9 +114,15 @@ document.addEventListener('fullscreenchange', () => {
 function speak(text) {
     const t = (text || '').trim();
     if (!t) return;
-    const url = `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=tw-ob&tl=de&q=${encodeURIComponent(t)}`;
-    const audio = new Audio(url);
-    audio.play().catch(() => {});
+    if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(t);
+        utterance.lang = 'de-DE';
+        window.speechSynthesis.speak(utterance);
+    } else {
+        const url = `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=tw-ob&tl=de&q=${encodeURIComponent(t)}`;
+        const audio = new Audio(url);
+        audio.play().catch(() => {});
+    }
 }
 
 function triggerAlarm(unit, info) {
@@ -115,7 +134,7 @@ function triggerAlarm(unit, info) {
     const text = `${info.note || ''} ${info.location || ''}`.trim() || unit;
     alarmSound.play().catch(() => {});
     alarmSound.onended = () => {
-        speak(text);
+        setTimeout(() => speak(text), 500);
         alarmSound.onended = null;
     };
     latestDiv.innerHTML = `<strong>${unit}</strong> ${text}`;
