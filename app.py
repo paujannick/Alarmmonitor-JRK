@@ -141,12 +141,13 @@ def index():
 
 @app.route('/dispatch')
 def dispatch():
+    sorted_incidents = sorted(incidents, key=lambda inc: inc.get('start') or '', reverse=True)
     return render_template(
         'dispatch.html',
         title='Leitstelle',
         vehicles=vehicles,
         status_text=STATUS_TEXT,
-        incidents=incidents,
+        incidents=sorted_incidents,
     )
 
 
@@ -174,10 +175,20 @@ def api_dispatch():
             lat, lon = geocode(location)
         info = vehicles[unit]
         info['status'] = status
-        info['note'] = note
-        info['location'] = location
-        info['lat'] = lat
-        info['lon'] = lon
+        active = any(
+            inc.get('active') and unit in inc.get('vehicles', [])
+            for inc in incidents
+        )
+        if note or location or lat is not None or lon is not None:
+            info['note'] = note
+            info['location'] = location
+            info['lat'] = lat
+            info['lon'] = lon
+        elif not active:
+            info['note'] = ''
+            info['location'] = ''
+            info['lat'] = None
+            info['lon'] = None
         for inc in incidents:
             if inc.get('active') and unit in inc.get('vehicles', []):
                 inc.setdefault('log', []).append({
@@ -308,6 +319,19 @@ def api_end_incident(inc_id):
         if inc['id'] == inc_id and inc.get('active'):
             inc['active'] = False
             inc['end'] = datetime.utcnow().isoformat()
+            for unit in inc.get('vehicles', []):
+                if unit in vehicles:
+                    if not any(
+                        other.get('active') and unit in other.get('vehicles', [])
+                        for other in incidents
+                        if other is not inc
+                    ):
+                        info = vehicles[unit]
+                        info['note'] = ''
+                        info['location'] = ''
+                        info['lat'] = None
+                        info['lon'] = None
+            save_vehicles()
             save_incidents()
             return jsonify({'ok': True})
     return jsonify({'ok': False}), 404

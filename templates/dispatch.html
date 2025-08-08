@@ -122,6 +122,17 @@
 {% block scripts %}
 <script>
 const form = document.getElementById('dispatch-form');
+const vehiclesData = {{ vehicles|tojson }};
+const unitSelect = form.querySelector('select[name="unit"]');
+const statusSelect = form.querySelector('select[name="status"]');
+function updateStatusSelect() {
+    const unit = unitSelect.value;
+    if (vehiclesData[unit]) {
+        statusSelect.value = vehiclesData[unit].status;
+    }
+}
+unitSelect.addEventListener('change', updateStatusSelect);
+updateStatusSelect();
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(form);
