@@ -18,20 +18,26 @@
     <label class="form-label">Besatzung (kommagetrennt)</label>
     <input type="text" name="crew" class="form-control">
   </div>
+  <div class="col-md-3">
+    <label class="form-label">Sprachausgabe</label>
+    <input type="text" name="tts" class="form-control">
+  </div>
   <div class="col-12">
     <button type="submit" class="btn btn-primary">Hinzufügen</button>
   </div>
 </form>
 <table class="table table-striped" id="vehicle-list">
   <thead>
-    <tr><th>Kurzname</th><th>Funkrufname</th><th>Besatzung</th><th>Status</th><th>Icon</th><th>Aktion</th></tr>
+    <tr><th>Kurzname</th><th>Name</th><th>Funkrufname</th><th>Besatzung</th><th>Sprachausgabe</th><th>Status</th><th>Icon</th><th>Aktion</th></tr>
   </thead>
   <tbody>
   {% for name, info in vehicles.items() %}
     <tr data-unit="{{ name }}">
       <td>{{ name }}</td>
-      <td>{{ info.callsign }}</td>
-      <td>{{ info.crew|join(', ') }}</td>
+      <td><input type="text" class="form-control form-control-sm name" value="{{ info.name }}"></td>
+      <td><input type="text" class="form-control form-control-sm callsign" value="{{ info.callsign }}"></td>
+      <td><input type="text" class="form-control form-control-sm crew" value="{{ info.crew|join(', ') }}"></td>
+      <td><input type="text" class="form-control form-control-sm tts" value="{{ info.tts }}"></td>
       <td>{{ info.status }}</td>
       <td class="icon-cell">
         {% if info.icon %}<img src="{{ url_for('static', filename=info.icon) }}" height="32" class="mb-1">{% endif %}
@@ -40,7 +46,10 @@
           <button class="btn btn-sm btn-secondary">Upload</button>
         </form>
       </td>
-      <td><button class="btn btn-sm btn-danger delete">Löschen</button></td>
+      <td>
+        <button class="btn btn-sm btn-primary save">Speichern</button>
+        <button class="btn btn-sm btn-danger delete">Löschen</button>
+      </td>
     </tr>
   {% endfor %}
   </tbody>
@@ -57,6 +66,7 @@ form.addEventListener('submit', async (e) => {
   } else {
     formData.crew = [];
   }
+  formData.tts = formData.tts || '';
   const res = await fetch('/api/vehicles', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -75,6 +85,28 @@ document.querySelectorAll('#vehicle-list .delete').forEach(btn => {
     const r = await res.json();
     if (r.ok) {
       e.target.closest('tr').remove();
+    }
+  });
+});
+
+document.querySelectorAll('#vehicle-list .save').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    const tr = e.target.closest('tr');
+    const unit = tr.dataset.unit;
+    const payload = {
+      name: tr.querySelector('.name').value,
+      callsign: tr.querySelector('.callsign').value,
+      crew: tr.querySelector('.crew').value.split(',').map(s => s.trim()).filter(Boolean),
+      tts: tr.querySelector('.tts').value
+    };
+    const res = await fetch(`/api/vehicles/${unit}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const r = await res.json();
+    if (r.ok) {
+      alert('Gespeichert');
     }
   });
 });
