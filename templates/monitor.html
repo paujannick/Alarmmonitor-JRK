@@ -60,6 +60,19 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: 
 const vehicleMarkers = {};
 const incidentMarkers = {};
 const iconBase = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/';
+function unlockAudio() {
+    alarmSound.play().then(() => {
+        alarmSound.pause();
+        alarmSound.currentTime = 0;
+    }).catch(() => {});
+    if ('speechSynthesis' in window) {
+        const utter = new SpeechSynthesisUtterance(' ');
+        utter.lang = 'de-DE';
+        window.speechSynthesis.speak(utter);
+    }
+}
+document.addEventListener('touchstart', unlockAudio, {once: true});
+document.addEventListener('click', unlockAudio, {once: true});
 function fitMapToAll() {
     const markers = [
         ...Object.values(vehicleMarkers),
