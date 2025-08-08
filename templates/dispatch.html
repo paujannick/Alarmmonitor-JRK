@@ -91,7 +91,7 @@
             </select>
           </div>
           <div class="mb-3">
-            <label class="form-label" for="incident-keyword">Alarmierungsgrund</label>
+            <label class="form-label" for="incident-keyword">Stichwort</label>
             <input type="text" name="keyword" id="incident-keyword" class="form-control">
           </div>
           <div class="mb-3">
@@ -117,7 +117,7 @@
           {% for name, info in vehicles.items() %}
             <div class="form-check form-check-inline">
               <input class="form-check-input" type="checkbox" name="vehicles" value="{{ name }}" id="iv{{ loop.index }}">
-              <label class="form-check-label" for="iv{{ loop.index }}">{{ name }}{% if info.callsign %} ({{ info.callsign }}){% endif %}</label>
+              <label class="form-check-label" for="iv{{ loop.index }}">{{ name }}</label>
             </div>
           {% endfor %}
           </div>
