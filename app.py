@@ -124,24 +124,6 @@ def api_dispatch():
         info['lat'] = lat
         info['lon'] = lon
         save_vehicles()
-        if status >= 3:
-            incident = {
-                'id': len(incidents) + 1,
-                'start': datetime.utcnow().isoformat(),
-                'end': None,
-                'vehicles': [unit],
-                'notes': [],
-                'location': {
-                    'name': location,
-                    'lat': lat,
-                    'lon': lon,
-                },
-                'active': True,
-            }
-            if note:
-                incident['notes'].append({'time': datetime.utcnow().isoformat(), 'text': note})
-            incidents.append(incident)
-            save_incidents()
         return jsonify({'ok': True})
     return jsonify({'ok': False}), 400
 
@@ -182,6 +164,7 @@ def api_delete_vehicle(unit):
 def api_create_incident():
     data = request.json or {}
     vehicles_assigned = data.get('vehicles', [])
+    keyword = data.get('keyword', '')
     note = data.get('note', '')
     location = data.get('location', '')
     lat = data.get('lat')
@@ -191,6 +174,7 @@ def api_create_incident():
         'start': datetime.utcnow().isoformat(),
         'end': None,
         'vehicles': vehicles_assigned,
+        'keyword': keyword,
         'notes': [],
         'location': {
             'name': location,
@@ -203,6 +187,15 @@ def api_create_incident():
         incident['notes'].append({'time': datetime.utcnow().isoformat(), 'text': note})
     incidents.append(incident)
     save_incidents()
+    for unit in vehicles_assigned:
+        if unit in vehicles:
+            info = vehicles[unit]
+            info['status'] = 3
+            info['note'] = keyword
+            info['location'] = location
+            info['lat'] = lat
+            info['lon'] = lon
+    save_vehicles()
     return jsonify({'ok': True, 'id': incident['id']})
 
 

@@ -1,7 +1,8 @@
 {% extends 'base.html' %}
 {% block content %}
 <h1 class="mb-4">Leitstellen Interface</h1>
-<form id="dispatch-form" class="row g-3">
+<h2>Status ändern</h2>
+<form id="dispatch-form" class="row g-3 mb-4">
     <div class="col-md-3">
         <label class="form-label">Fahrzeug</label>
         <select name="unit" class="form-select">
@@ -38,7 +39,44 @@
         <button type="submit" class="btn btn-primary">Senden</button>
     </div>
 </form>
-<div id="result" class="mt-3"></div>
+<div id="result" class="mt-3 mb-4"></div>
+
+<h2>Alarmierung</h2>
+<form id="alarm-form" class="row g-3">
+    <div class="col-md-3">
+        <label class="form-label">Ort</label>
+        <input type="text" name="location" class="form-control">
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Stichwort</label>
+        <input type="text" name="keyword" class="form-control">
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Breitengrad</label>
+        <input type="text" name="lat" class="form-control">
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Längengrad</label>
+        <input type="text" name="lon" class="form-control">
+    </div>
+    <div class="col-12">
+        <label class="form-label">Fahrzeuge</label>
+        <div class="form-check">
+        {% for name, info in vehicles.items() %}
+            {% if info.status < 3 %}
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="vehicles" value="{{ name }}" id="v{{ loop.index }}">
+                <label class="form-check-label" for="v{{ loop.index }}">{{ name }}</label>
+            </div>
+            {% endif %}
+        {% endfor %}
+        </div>
+    </div>
+    <div class="col-12">
+        <button type="submit" class="btn btn-danger">Alarm auslösen</button>
+    </div>
+</form>
+<div id="alarm-result" class="mt-3"></div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -54,6 +92,21 @@ form.addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     document.getElementById('result').textContent = data.ok ? 'Gesendet' : 'Fehler';
+});
+
+const alarmForm = document.getElementById('alarm-form');
+alarmForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(alarmForm);
+    const payload = Object.fromEntries(fd.entries());
+    payload.vehicles = fd.getAll('vehicles');
+    const res = await fetch('/api/incidents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    document.getElementById('alarm-result').textContent = data.ok ? 'Alarm gesendet' : 'Fehler';
 });
 </script>
 {% endblock %}
