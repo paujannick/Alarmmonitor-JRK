@@ -48,17 +48,9 @@ STATUS_TEXT = {
     2: 'Frei auf Wache',
     3: 'Auf Anfahrt',
     4: 'Am Einsatzort',
-    41: 'Einsatzbereit am Einsatzort',
     5: 'Sprechwunsch',
-    51: 'Anfrage Pause',
     6: 'nicht Einsatzbereit',
-    61: 'Dienstende',
-    62: 'unbesetzt',
-    68: 'Desinfektion',
-    69: 'Pause',
     7: 'gebunden',
-    71: 'Abkömmlich',
-    77: 'Sonder und Wegerechte',
     8: 'Bedingt Einsatzbereit',
     9: 'Fremdanmeldung',
 }
@@ -130,11 +122,6 @@ def vehicles_page():
     return render_template('vehicles.html', title='Fahrzeuge', vehicles=vehicles)
 
 
-@app.route('/incidents')
-def incidents_page():
-    return render_template('incidents.html', title='Einsätze', incidents=incidents, vehicles=vehicles, status_text=STATUS_TEXT)
-
-
 @app.route('/api/status')
 def api_status():
     return jsonify(vehicles)
@@ -201,6 +188,11 @@ def api_delete_vehicle(unit):
         save_vehicles()
         return jsonify({'ok': True})
     return jsonify({'ok': False}), 404
+
+
+@app.route('/api/incidents', methods=['GET'])
+def api_list_incidents():
+    return jsonify(incidents)
 
 
 @app.route('/api/incidents', methods=['POST'])
