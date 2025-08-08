@@ -6,6 +6,7 @@
 <h1 class="mb-4">Alarmmonitor</h1>
 <button id="fullscreen" class="btn btn-secondary mb-3">Vollbild</button>
 <div id="latest-incident" class="alert alert-danger display-4" style="display:none;"></div>
+<button id="enable-audio" class="btn btn-secondary mb-3">Ton aktivieren</button>
 <div class="row">
   <div class="col-md-6">
     <div id="map" style="height:400px;" class="mb-3"></div>
@@ -35,7 +36,10 @@
     </table>
   </div>
 </div>
-<audio id="alarm" src="{{ url_for('static', filename='gong.wav') }}"></audio>
+<audio id="alarm" preload="auto">
+  <source src="{{ url_for('static', filename='gong.mp3') }}" type="audio/mpeg">
+  <source src="{{ url_for('static', filename='gong.wav') }}" type="audio/wav">
+</audio>
 {% endblock %}
 {% block scripts %}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -54,6 +58,9 @@ for (const [unit, info] of Object.entries({{ vehicles|tojson }})) {
 }
 const alarmSound = document.getElementById('alarm');
 const latestDiv = document.getElementById('latest-incident');
+const enableBtn = document.getElementById('enable-audio');
+let audioUnlocked = false;
+const ttsEl = new Audio();
 let lastAlarmId = null;
 const map = L.map('map').setView([51, 10], 6);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '© OpenStreetMap'}).addTo(map);
@@ -65,12 +72,10 @@ function unlockAudio() {
         alarmSound.pause();
         alarmSound.currentTime = 0;
     }).catch(() => {});
-    if ('speechSynthesis' in window) {
-        const utter = new SpeechSynthesisUtterance(' ');
-        utter.lang = 'de-DE';
-        window.speechSynthesis.speak(utter);
-    }
+    audioUnlocked = true;
+    enableBtn.style.display = 'none';
 }
+enableBtn.addEventListener('click', unlockAudio, {once: true});
 document.addEventListener('touchstart', unlockAudio, {once: true});
 document.addEventListener('click', unlockAudio, {once: true});
 function fitMapToAll() {
@@ -118,11 +123,15 @@ function speak(text) {
         const utterance = new SpeechSynthesisUtterance(t);
         utterance.lang = 'de-DE';
         window.speechSynthesis.speak(utterance);
-    } else {
-        const url = `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=tw-ob&tl=de&q=${encodeURIComponent(t)}`;
-        const audio = new Audio(url);
-        audio.play().catch(() => {});
+        return;
     }
+    if (!audioUnlocked) {
+        enableBtn.style.display = '';
+        return;
+    }
+    const url = `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=tw-ob&tl=de&q=${encodeURIComponent(t)}`;
+    ttsEl.src = url;
+    ttsEl.play().catch(err => console.error(err));
 }
 
 function triggerAlarm(unit, info) {
@@ -130,13 +139,18 @@ function triggerAlarm(unit, info) {
     if (alarmId === lastAlarmId) return;
     lastAlarmId = alarmId;
     lastAlarmUnit = unit;
-    alarmSound.currentTime = 0;
     const text = `${info.note || ''} ${info.location || ''}`.trim() || unit;
-    alarmSound.play().catch(() => {});
-    alarmSound.onended = () => {
-        setTimeout(() => speak(text), 500);
-        alarmSound.onended = null;
-    };
+    if (audioUnlocked) {
+        alarmSound.currentTime = 0;
+        alarmSound.play().catch(() => {});
+        alarmSound.onended = () => {
+            setTimeout(() => speak(text), 500);
+            alarmSound.onended = null;
+        };
+    } else {
+        enableBtn.style.display = '';
+        speak(text);
+    }
     latestDiv.innerHTML = `<strong>${unit}</strong> ${text}`;
     latestDiv.style.display = 'block';
     if (info.lat && info.lon) {
