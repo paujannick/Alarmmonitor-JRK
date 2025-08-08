@@ -61,16 +61,59 @@
 <h2 class="mt-5">Einsätze</h2>
 <table class="table table-striped" id="incident-list">
   <thead>
-    <tr><th>ID</th><th>Fahrzeuge</th><th>Ort</th><th>Stichwort</th><th>Aktiv</th></tr>
+    <tr><th>ID</th><th>Start</th><th>Fahrzeuge</th><th>Ort</th><th>Stichwort</th><th>Aktiv</th><th>Notizen</th><th>Protokoll</th><th>Aktion</th></tr>
   </thead>
   <tbody>
   {% for inc in incidents %}
-    <tr>
+    <tr data-id="{{ inc.id }}">
       <td>{{ inc.id }}</td>
+      <td>{{ inc.start }}</td>
       <td>{{ inc.vehicles|join(', ') }}</td>
       <td>{{ inc.location.name }}</td>
       <td>{{ inc.keyword }}</td>
       <td>{{ 'Ja' if inc.active else 'Nein' }}</td>
+      <td>
+        <ul class="list-unstyled mb-2">
+          {% for n in inc.notes %}
+          <li>{{ n.time }} - {{ n.text }}</li>
+          {% endfor %}
+        </ul>
+        {% if inc.active %}
+        <form class="note-form">
+          <div class="input-group input-group-sm">
+            <textarea name="text" class="form-control" rows="2" placeholder="Notiz"></textarea>
+            <button class="btn btn-secondary" type="submit">Hinzufügen</button>
+          </div>
+        </form>
+        {% endif %}
+      </td>
+      <td>
+        <ul class="list-unstyled mb-2">
+          {% for l in inc.log or [] %}
+          <li>{{ l.time }} - {{ l.unit }}: {{ l.status if l.status is string else status_text[l.status] }}</li>
+          {% endfor %}
+        </ul>
+        {% if inc.active %}
+        <form class="alert-form">
+          <div class="input-group input-group-sm">
+            <select name="unit" class="form-select">
+              {% for name, v in vehicles.items() %}
+                {% if name not in inc.vehicles and v.status < 3 %}
+                  <option value="{{ name }}">{{ name }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+            <button class="btn btn-warning" type="submit">Mitalarmieren</button>
+          </div>
+        </form>
+        {% endif %}
+      </td>
+      <td>
+        {% if inc.active %}
+        <button class="btn btn-sm btn-success end">Beenden</button>
+        {% endif %}
+        <button class="btn btn-sm btn-danger delete">Löschen</button>
+      </td>
     </tr>
   {% endfor %}
   </tbody>
@@ -105,6 +148,66 @@ alarmForm.addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     document.getElementById('alarm-result').textContent = data.ok ? 'Alarm gesendet' : 'Fehler';
+});
+
+document.querySelectorAll('#incident-list .note-form').forEach(form => {
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const tr = e.target.closest('tr');
+    const id = tr.dataset.id;
+    const text = form.querySelector('[name="text"]').value;
+    const res = await fetch(`/api/incidents/${id}/notes`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text})
+    });
+    const r = await res.json();
+    if (r.ok) {
+      location.reload();
+    }
+  });
+});
+
+document.querySelectorAll('#incident-list .end').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    const tr = e.target.closest('tr');
+    const id = tr.dataset.id;
+    const res = await fetch(`/api/incidents/${id}/end`, {method: 'POST'});
+    const r = await res.json();
+    if (r.ok) {
+      location.reload();
+    }
+  });
+});
+
+document.querySelectorAll('#incident-list .delete').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    const tr = e.target.closest('tr');
+    const id = tr.dataset.id;
+    const res = await fetch(`/api/incidents/${id}`, {method: 'DELETE'});
+    const r = await res.json();
+    if (r.ok) {
+      location.reload();
+    }
+  });
+});
+
+document.querySelectorAll('#incident-list .alert-form').forEach(form => {
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const tr = e.target.closest('tr');
+    const id = tr.dataset.id;
+    const unit = form.querySelector('select[name="unit"]').value;
+    const res = await fetch(`/api/incidents/${id}/alert`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({units: [unit]})
+    });
+    const r = await res.json();
+    if (r.ok) {
+      location.reload();
+    }
+  });
 });
 
 setInterval(() => window.location.reload(), 10000);
