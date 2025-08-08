@@ -60,6 +60,16 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: 
 const vehicleMarkers = {};
 const incidentMarkers = {};
 const iconBase = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/';
+function fitMapToAll() {
+    const markers = [
+        ...Object.values(vehicleMarkers),
+        ...Object.values(incidentMarkers)
+    ].filter(m => m);
+    if (markers.length) {
+        const group = new L.featureGroup(markers);
+        map.fitBounds(group.getBounds().pad(0.05));
+    }
+}
 const icons = {
   RTW: new L.Icon({iconUrl: iconBase + 'marker-icon-red.png', shadowUrl: iconBase + 'marker-shadow.png', iconSize:[25,41], iconAnchor:[12,41], popupAnchor:[1,-34], shadowSize:[41,41]}),
   KTW: new L.Icon({iconUrl: iconBase + 'marker-icon-blue.png', shadowUrl: iconBase + 'marker-shadow.png', iconSize:[25,41], iconAnchor:[12,41], popupAnchor:[1,-34], shadowSize:[41,41]}),
@@ -89,10 +99,11 @@ document.addEventListener('fullscreenchange', () => {
   }
 });
 function speak(text) {
-    if ('speechSynthesis' in window) {
-        const msg = new SpeechSynthesisUtterance(text);
-        speechSynthesis.speak(msg);
-    }
+    const t = (text || '').trim();
+    if (!t) return;
+    const url = `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=tw-ob&tl=de&q=${encodeURIComponent(t)}`;
+    const audio = new Audio(url);
+    audio.play().catch(() => {});
 }
 
 function triggerAlarm(unit, info) {
@@ -110,7 +121,6 @@ function triggerAlarm(unit, info) {
     latestDiv.innerHTML = `<strong>${unit}</strong> ${text}`;
     latestDiv.style.display = 'block';
     if (info.lat && info.lon) {
-        map.setView([info.lat, info.lon], 13);
         if (vehicleMarkers[unit]) {
             vehicleMarkers[unit].setLatLng([info.lat, info.lon]);
             vehicleMarkers[unit].setIcon(getIcon(unit));
@@ -118,6 +128,7 @@ function triggerAlarm(unit, info) {
             vehicleMarkers[unit] = L.marker([info.lat, info.lon], {icon: getIcon(unit)}).addTo(map).bindPopup(unit);
         }
     }
+    fitMapToAll();
 }
 
 async function refresh() {
@@ -182,6 +193,7 @@ async function refresh() {
             delete incidentMarkers[inc.id];
         }
     }
+    fitMapToAll();
 }
 const evtSource = new EventSource('/events');
 evtSource.onmessage = () => refresh();
