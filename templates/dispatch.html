@@ -25,40 +25,7 @@
 </form>
 <div id="result" class="mt-3 mb-4"></div>
 
-<h2>Alarmierung</h2>
-<form id="alarm-form" class="row g-3">
-    <div class="col-md-3">
-        <label class="form-label">Ort</label>
-        <input type="text" name="location" class="form-control">
-    </div>
-    <div class="col-md-3">
-        <label class="form-label">Stichwort</label>
-        <input type="text" name="keyword" class="form-control">
-    </div>
-    <div class="col-md-6">
-        <label class="form-label">Notiz</label>
-        <textarea name="note" class="form-control" rows="2"></textarea>
-    </div>
-    <div class="col-12">
-        <label class="form-label">Fahrzeuge</label>
-        <div class="form-check">
-        {% for name, info in vehicles.items() %}
-            {% if info.status < 3 %}
-            <div class="form-check form-check-inline">
-                <input class="form-check-input" type="checkbox" name="vehicles" value="{{ name }}" id="v{{ loop.index }}">
-                <label class="form-check-label" for="v{{ loop.index }}">{{ name }}</label>
-            </div>
-            {% endif %}
-        {% endfor %}
-        </div>
-    </div>
-    <div class="col-12">
-        <button type="submit" class="btn btn-danger">Alarm auslösen</button>
-    </div>
-</form>
-<div id="alarm-result" class="mt-3"></div>
-
-<h2 class="mt-5">Einsätze</h2>
+<h2 class="mt-5 d-flex justify-content-between align-items-center">Einsätze <button class="btn btn-danger btn-sm" id="incident-new">Einsatz anlegen</button></h2>
 <table class="table table-striped" id="incident-list">
   <thead>
     <tr><th>ID</th><th>Start</th><th>Fahrzeuge</th><th>Ort</th><th>Stichwort</th><th>Aktiv</th><th>Notizen</th><th>Protokoll</th><th>Aktion</th></tr>
@@ -78,14 +45,6 @@
           <li>{{ n.time }} - {{ n.text }}</li>
           {% endfor %}
         </ul>
-        {% if inc.active %}
-        <form class="note-form">
-          <div class="input-group input-group-sm">
-            <textarea name="text" class="form-control" rows="2" placeholder="Notiz"></textarea>
-            <button class="btn btn-secondary" type="submit">Hinzufügen</button>
-          </div>
-        </form>
-        {% endif %}
       </td>
       <td>
         <ul class="list-unstyled mb-2">
@@ -93,22 +52,9 @@
           <li>{{ l.time }} - {{ l.unit }}: {{ l.status if l.status is string else l.status ~ ' - ' ~ status_text[l.status] }}</li>
           {% endfor %}
         </ul>
-        {% if inc.active %}
-        <form class="alert-form">
-          <div class="input-group input-group-sm">
-            <select name="unit" class="form-select">
-              {% for name, v in vehicles.items() %}
-                {% if name not in inc.vehicles and v.status < 3 %}
-                  <option value="{{ name }}">{{ name }}</option>
-                {% endif %}
-              {% endfor %}
-            </select>
-            <button class="btn btn-warning" type="submit">Mitalarmieren</button>
-          </div>
-        </form>
-        {% endif %}
       </td>
       <td>
+        <button class="btn btn-sm btn-primary edit">Bearbeiten</button>
         {% if inc.active %}
         <button class="btn btn-sm btn-success end">Beenden</button>
         {% endif %}
@@ -124,12 +70,17 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Einsatzdetails</h5>
+        <h5 class="modal-title">Einsatz</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <form id="incident-form">
           <input type="hidden" name="id">
+          <div class="mb-3">
+            <label class="form-label">Start</label>
+            <input type="text" name="start" class="form-control" readonly>
+          </div>
+          <h6>Einsatzdaten</h6>
           <div class="mb-3">
             <label class="form-label">Vorlage</label>
             <select name="template" class="form-select">
@@ -161,8 +112,17 @@
             <label class="form-label">Patient</label>
             <input type="text" name="patient" class="form-control">
           </div>
+          <h6>Fahrzeugzuordnung</h6>
           <div class="mb-3">
-            <label class="form-label">Notiz</label>
+          {% for name, info in vehicles.items() %}
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="checkbox" name="vehicles" value="{{ name }}" id="iv{{ loop.index }}">
+              <label class="form-check-label" for="iv{{ loop.index }}">{{ name }}</label>
+            </div>
+          {% endfor %}
+          </div>
+          <h6>Notiz</h6>
+          <div class="mb-3">
             <textarea name="note" class="form-control" rows="3"></textarea>
           </div>
         </form>
@@ -202,40 +162,30 @@ form.addEventListener('submit', async (e) => {
     document.getElementById('result').textContent = data.ok ? 'Gesendet' : 'Fehler';
 });
 
-const alarmForm = document.getElementById('alarm-form');
 const incidentModal = new bootstrap.Modal(document.getElementById('incident-modal'));
 function fillIncidentModal(inc) {
-    const f = document.getElementById('incident-form');
-    f.elements['id'].value = inc.id || '';
-    f.keyword.value = inc.keyword || '';
-    f.location.value = (inc.location && inc.location.name) || '';
-    f.priority.value = inc.priority || '';
-    f.patient.value = inc.patient || '';
-    f.note.value = '';
-    f.template.value = '';
+  const f = document.getElementById('incident-form');
+  f.reset();
+  f.elements['id'].value = inc.id || '';
+  f.start.value = inc.start ? new Date(inc.start).toLocaleString('de-DE') : '';
+  f.keyword.value = inc.keyword || '';
+  f.location.value = (inc.location && inc.location.name) || '';
+  f.priority.value = inc.priority || '';
+  f.patient.value = inc.patient || '';
+  f.note.value = '';
+  f.template.value = '';
+  f.querySelectorAll('input[name="vehicles"]').forEach(cb => {
+    cb.checked = inc.vehicles && inc.vehicles.includes(cb.value);
+  });
+  document.querySelector('#incident-modal .modal-title').textContent = inc.id ? 'Einsatz bearbeiten' : 'Einsatz anlegen';
 }
-alarmForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(alarmForm);
-    const payload = Object.fromEntries(fd.entries());
-    payload.vehicles = fd.getAll('vehicles');
-    const res = await fetch('/api/incidents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    document.getElementById('alarm-result').textContent = data.ok ? 'Alarm gesendet' : 'Fehler';
-    if (data.ok) {
-        const incRes = await fetch(`/api/incidents/${data.id}`);
-        const incData = await incRes.json();
-        fillIncidentModal(incData);
-        incidentModal.show();
-    }
+document.getElementById('incident-new').addEventListener('click', () => {
+  fillIncidentModal({});
+  incidentModal.show();
 });
-
-document.querySelectorAll('#incident-list tbody tr').forEach(tr => {
-  tr.addEventListener('dblclick', async () => {
+document.querySelectorAll('#incident-list .edit').forEach(btn => {
+  btn.addEventListener('click', async e => {
+    const tr = e.target.closest('tr');
     const id = tr.dataset.id;
     const res = await fetch(`/api/incidents/${id}`);
     const inc = await res.json();
@@ -251,12 +201,15 @@ document.getElementById('incident-save').addEventListener('click', async () => {
     keyword: f.keyword.value,
     location: {name: f.location.value},
     priority: f.priority.value,
-    patient: f.patient.value
+    patient: f.patient.value,
+    vehicles: Array.from(f.querySelectorAll('input[name="vehicles"]:checked')).map(cb => cb.value)
   };
   const note = f.note.value.trim();
   if (note) payload.note = note;
-  const res = await fetch(`/api/incidents/${id}`, {
-    method: 'PUT',
+  const url = id ? `/api/incidents/${id}` : '/api/incidents';
+  const method = id ? 'PUT' : 'POST';
+  const res = await fetch(url, {
+    method,
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(payload)
   });
@@ -280,25 +233,6 @@ document.querySelector('#incident-form [name="template"]').addEventListener('cha
     f.priority.value = t.priority;
   }
 });
-
-document.querySelectorAll('#incident-list .note-form').forEach(form => {
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const tr = e.target.closest('tr');
-    const id = tr.dataset.id;
-    const text = form.querySelector('[name="text"]').value;
-    const res = await fetch(`/api/incidents/${id}/notes`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({text})
-    });
-    const r = await res.json();
-    if (r.ok) {
-      location.reload();
-    }
-  });
-});
-
 document.querySelectorAll('#incident-list .end').forEach(btn => {
   btn.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
@@ -316,24 +250,6 @@ document.querySelectorAll('#incident-list .delete').forEach(btn => {
     const tr = e.target.closest('tr');
     const id = tr.dataset.id;
     const res = await fetch(`/api/incidents/${id}`, {method: 'DELETE'});
-    const r = await res.json();
-    if (r.ok) {
-      location.reload();
-    }
-  });
-});
-
-document.querySelectorAll('#incident-list .alert-form').forEach(form => {
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const tr = e.target.closest('tr');
-    const id = tr.dataset.id;
-    const unit = form.querySelector('select[name="unit"]').value;
-    const res = await fetch(`/api/incidents/${id}/alert`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({units: [unit]})
-    });
     const r = await res.json();
     if (r.ok) {
       location.reload();
