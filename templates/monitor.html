@@ -42,9 +42,12 @@
 <script>
 const statusText = {{ status_text|tojson }};
 const lastStatus = {};
+const lastAlertInfo = {};
+let lastAlarmUnit = null;
 const vehicleIcons = {};
 for (const [unit, info] of Object.entries({{ vehicles|tojson }})) {
     lastStatus[unit] = info.status;
+    lastAlertInfo[unit] = {note: info.note, location: info.location};
     if (info.icon) {
         vehicleIcons[unit] = L.icon({iconUrl:`/static/${info.icon}`, iconSize:[32,32], iconAnchor:[16,16]});
     }
@@ -96,15 +99,14 @@ function triggerAlarm(unit, info) {
     const alarmId = unit + (info.note || '') + (info.location || '');
     if (alarmId === lastAlarmId) return;
     lastAlarmId = alarmId;
+    lastAlarmUnit = unit;
     alarmSound.currentTime = 0;
-    const text = `${info.note || ''} ${info.location || ''}`.trim();
+    const text = `${info.note || ''} ${info.location || ''}`.trim() || unit;
     alarmSound.play().catch(() => {});
-    if (text) {
-        alarmSound.onended = () => {
-            speak(text);
-            alarmSound.onended = null;
-        };
-    }
+    alarmSound.onended = () => {
+        speak(text);
+        alarmSound.onended = null;
+    };
     latestDiv.innerHTML = `<strong>${unit}</strong> ${text}`;
     latestDiv.style.display = 'block';
     if (info.lat && info.lon) {
@@ -140,9 +142,17 @@ async function refresh() {
                 iconCell.innerHTML = '';
                 delete vehicleIcons[unit];
             }
-            if (lastStatus[unit] !== undefined && lastStatus[unit] < 3 && info.status >= 3) {
-                triggerAlarm(unit, info);
+            const prev = lastAlertInfo[unit] || {};
+            if (info.status < 3 && (info.note || info.location)) {
+                if (info.note !== prev.note || info.location !== prev.location) {
+                    triggerAlarm(unit, info);
+                }
+            } else if (info.status >= 3 && lastAlarmUnit === unit) {
+                latestDiv.style.display = 'none';
+                lastAlarmUnit = null;
+                lastAlarmId = null;
             }
+            lastAlertInfo[unit] = {note: info.note, location: info.location};
             lastStatus[unit] = info.status;
             if (info.lat && info.lon) {
                 if (vehicleMarkers[unit]) {
