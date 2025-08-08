@@ -5,5 +5,4 @@ if [ ! -d "venv" ]; then
   exit 1
 fi
 source venv/bin/activate
-export FLASK_APP=app.py
-flask run --host=0.0.0.0 --port=5000
+uvicorn app.main:app --host=0.0.0.0 --port=8080
