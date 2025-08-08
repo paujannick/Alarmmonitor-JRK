@@ -11,7 +11,10 @@
   {% for name, info in vehicles.items() %}
     <tr data-unit="{{ name }}">
       <td>{{ info.callsign }}</td>
-      <td><input type="text" class="form-control form-control-sm tts" value="{{ info.tts or info.callsign }}"></td>
+      <td>
+        <label class="visually-hidden" for="tts-{{ loop.index }}">Sprachausgabe</label>
+        <input type="text" id="tts-{{ loop.index }}" class="form-control form-control-sm tts" value="{{ info.tts or info.callsign }}">
+      </td>
       <td><button class="btn btn-sm btn-primary save">Speichern</button></td>
     </tr>
   {% endfor %}
