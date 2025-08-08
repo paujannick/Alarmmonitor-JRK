@@ -172,10 +172,18 @@ def index():
 @app.route('/dispatch')
 def dispatch():
     sorted_incidents = sorted(incidents, key=lambda inc: inc.get('start') or '', reverse=True)
+    available = {
+        name: info
+        for name, info in vehicles.items()
+        if info.get('status') in (1, 2)
+        and not any(
+            inc.get('active') and name in inc.get('vehicles', []) for inc in incidents
+        )
+    }
     return render_template(
         'dispatch.html',
         title='Leitstelle',
-        vehicles=vehicles,
+        vehicles=available,
         status_text=STATUS_TEXT,
         incidents=sorted_incidents,
     )
