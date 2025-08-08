@@ -27,3 +27,13 @@ body {
 #datetime {
   text-align: right;
 }
+
+/* Ensure form controls and modal content use dark text */
+.form-control,
+.form-select {
+  color: #000;
+}
+
+.modal-content {
+  color: #000;
+}
