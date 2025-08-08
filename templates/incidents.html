@@ -16,14 +16,6 @@
     <input type="text" name="location" class="form-control">
   </div>
   <div class="col-md-2">
-    <label class="form-label">Breite</label>
-    <input type="text" name="lat" class="form-control">
-  </div>
-  <div class="col-md-2">
-    <label class="form-label">Länge</label>
-    <input type="text" name="lon" class="form-control">
-  </div>
-  <div class="col-md-2">
     <label class="form-label">Stichwort</label>
     <input type="text" name="keyword" class="form-control">
   </div>
@@ -38,7 +30,7 @@
 
 <table class="table table-striped" id="incident-list">
   <thead>
-    <tr><th>ID</th><th>Start</th><th>Fahrzeuge</th><th>Ort</th><th>Stichwort</th><th>Aktiv</th><th>Notizen</th><th>Aktion</th></tr>
+    <tr><th>ID</th><th>Start</th><th>Fahrzeuge</th><th>Ort</th><th>Stichwort</th><th>Aktiv</th><th>Notizen</th><th>Protokoll</th><th>Aktion</th></tr>
   </thead>
   <tbody>
   {% for inc in incidents %}
@@ -65,9 +57,31 @@
         {% endif %}
       </td>
       <td>
+        <ul class="list-unstyled mb-2">
+          {% for l in inc.log or [] %}
+          <li>{{ l.time }} - {{ l.unit }}: {{ l.status if l.status is string else status_text[l.status] }}</li>
+          {% endfor %}
+        </ul>
+        {% if inc.active %}
+        <form class="alert-form">
+          <div class="input-group input-group-sm">
+            <select name="unit" class="form-select">
+              {% for name, v in vehicles.items() %}
+                {% if name not in inc.vehicles and v.status < 3 %}
+                  <option value="{{ name }}">{{ name }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+            <button class="btn btn-warning" type="submit">Mitalarmieren</button>
+          </div>
+        </form>
+        {% endif %}
+      </td>
+      <td>
         {% if inc.active %}
         <button class="btn btn-sm btn-success end">Beenden</button>
         {% endif %}
+        <button class="btn btn-sm btn-danger delete">Löschen</button>
       </td>
     </tr>
   {% endfor %}
@@ -121,6 +135,36 @@ document.querySelectorAll('#incident-list .end').forEach(btn => {
     const tr = e.target.closest('tr');
     const id = tr.dataset.id;
     const res = await fetch(`/api/incidents/${id}/end`, {method: 'POST'});
+    const r = await res.json();
+    if (r.ok) {
+      location.reload();
+    }
+  });
+});
+
+document.querySelectorAll('#incident-list .delete').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    const tr = e.target.closest('tr');
+    const id = tr.dataset.id;
+    const res = await fetch(`/api/incidents/${id}`, {method: 'DELETE'});
+    const r = await res.json();
+    if (r.ok) {
+      location.reload();
+    }
+  });
+});
+
+document.querySelectorAll('#incident-list .alert-form').forEach(form => {
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const tr = e.target.closest('tr');
+    const id = tr.dataset.id;
+    const unit = form.querySelector('select[name="unit"]').value;
+    const res = await fetch(`/api/incidents/${id}/alert`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({units: [unit]})
+    });
     const r = await res.json();
     if (r.ok) {
       location.reload();
