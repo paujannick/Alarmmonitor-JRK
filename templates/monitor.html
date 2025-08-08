@@ -5,6 +5,7 @@
 {% block content %}
 <h1 class="mb-4">Alarmmonitor</h1>
 <button id="fullscreen" class="btn btn-secondary mb-3">Vollbild</button>
+<button id="refresh" class="btn btn-primary mb-3 ms-2">Aktualisieren</button>
 <div id="latest-incident" class="alert alert-danger display-4" style="display:none;"></div>
 <div class="row">
   <div class="col-md-6">
@@ -24,7 +25,7 @@
         {% for name, info in vehicles.items() %}
             <tr data-unit="{{ name }}" class="status-{{ info.status }}">
                 <td>{{ name }}</td>
-                <td class="status-text">{{ status_text[info.status] }}</td>
+                <td class="status-text">{{ info.status }} - {{ status_text[info.status] }}</td>
                 <td class="note">{{ info.note }}</td>
                 <td class="location">{{ info.location }}</td>
             </tr>
@@ -121,7 +122,7 @@ async function refresh() {
         const row = document.querySelector(`tr[data-unit="${unit}"]`);
         if (row) {
             row.className = `status-${info.status}`;
-            row.querySelector('.status-text').textContent = statusText[info.status];
+            row.querySelector('.status-text').textContent = `${info.status} - ${statusText[info.status]}`;
             row.querySelector('.note').textContent = info.note;
             row.querySelector('.location').textContent = info.location;
             if (lastStatus[unit] !== undefined && lastStatus[unit] < 3 && info.status >= 3) {
@@ -156,7 +157,6 @@ async function refresh() {
         }
     }
 }
-refresh();
-setInterval(refresh, 1000);
+document.getElementById('refresh').addEventListener('click', refresh);
 </script>
 {% endblock %}

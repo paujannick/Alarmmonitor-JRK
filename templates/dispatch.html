@@ -90,7 +90,7 @@
       <td>
         <ul class="list-unstyled mb-2">
           {% for l in inc.log or [] %}
-          <li>{{ l.time }} - {{ l.unit }}: {{ l.status if l.status is string else status_text[l.status] }}</li>
+          <li>{{ l.time }} - {{ l.unit }}: {{ l.status if l.status is string else l.status ~ ' - ' ~ status_text[l.status] }}</li>
           {% endfor %}
         </ul>
         {% if inc.active %}

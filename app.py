@@ -227,7 +227,6 @@ def api_create_incident():
         incident['log'].append({'time': datetime.utcnow().isoformat(), 'unit': unit, 'status': 'alarmiert'})
         if unit in vehicles:
             info = vehicles[unit]
-            info['status'] = 3
             info['note'] = keyword
             info['location'] = location
             info['lat'] = lat
@@ -288,7 +287,6 @@ def api_alert_incident(inc_id):
                     })
                     if unit in vehicles:
                         info = vehicles[unit]
-                        info['status'] = 3
                         info['note'] = inc['keyword']
                         info['location'] = inc['location']['name']
                         info['lat'] = inc['location']['lat']
