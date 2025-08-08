@@ -1,8 +1,9 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 import json
 from pathlib import Path
 from datetime import datetime
 from urllib import parse, request as urlrequest
+from queue import Queue
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
@@ -19,6 +20,7 @@ DEFAULT_VEHICLES = {
         'location': '',
         'lat': None,
         'lon': None,
+        'icon': None,
     },
     'RTW2': {
         'name': 'Rettungswagen 2',
@@ -29,6 +31,7 @@ DEFAULT_VEHICLES = {
         'location': '',
         'lat': None,
         'lon': None,
+        'icon': None,
     },
     'KTW1': {
         'name': 'Krankentransportwagen 1',
@@ -39,6 +42,7 @@ DEFAULT_VEHICLES = {
         'location': '',
         'lat': None,
         'lon': None,
+        'icon': None,
     },
 }
 
@@ -59,14 +63,19 @@ STATUS_TEXT = {
 def load_vehicles():
     if DATA_FILE.exists():
         with open(DATA_FILE, encoding='utf-8') as f:
-            return json.load(f)
-    return DEFAULT_VEHICLES.copy()
+            data = json.load(f)
+            for info in data.values():
+                info.setdefault('icon', None)
+            return data
+    data = DEFAULT_VEHICLES.copy()
+    return data
 
 
 def save_vehicles():
     DATA_FILE.parent.mkdir(exist_ok=True)
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(vehicles, f, ensure_ascii=False, indent=2)
+    notify_change()
 
 
 def load_incidents():
@@ -80,10 +89,34 @@ def save_incidents():
     INCIDENT_FILE.parent.mkdir(exist_ok=True)
     with open(INCIDENT_FILE, 'w', encoding='utf-8') as f:
         json.dump(incidents, f, ensure_ascii=False, indent=2)
+    notify_change()
 
 
 vehicles = load_vehicles()
 incidents = load_incidents()
+
+listeners = []
+
+
+def notify_change():
+    for q in list(listeners):
+        q.put('update')
+
+
+def event_stream():
+    q = Queue()
+    listeners.append(q)
+    try:
+        while True:
+            data = q.get()
+            yield f"data: {data}\n\n"
+    finally:
+        listeners.remove(q)
+
+
+@app.route('/events')
+def events():
+    return Response(event_stream(), mimetype='text/event-stream')
 
 
 def geocode(address):
@@ -175,10 +208,29 @@ def api_add_vehicle():
             'location': '',
             'lat': None,
             'lon': None,
+            'icon': None,
         }
         save_vehicles()
         return jsonify({'ok': True})
     return jsonify({'ok': False}), 400
+
+
+@app.route('/api/vehicles/<unit>/icon', methods=['POST'])
+def api_upload_icon(unit):
+    if unit not in vehicles:
+        return jsonify({'ok': False}), 404
+    file = request.files.get('icon')
+    if not file:
+        return jsonify({'ok': False}), 400
+    icons_dir = Path('static/icons')
+    icons_dir.mkdir(parents=True, exist_ok=True)
+    ext = Path(file.filename).suffix or '.png'
+    filename = f"{unit}{ext}"
+    path = icons_dir / filename
+    file.save(path)
+    vehicles[unit]['icon'] = f"icons/{filename}"
+    save_vehicles()
+    return jsonify({'ok': True, 'icon': vehicles[unit]['icon']})
 
 
 @app.route('/api/vehicles/<unit>', methods=['DELETE'])
