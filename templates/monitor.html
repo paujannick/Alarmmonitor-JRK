@@ -67,7 +67,7 @@ const ttsEl = new Audio();
 let lastAlarmId = null;
 const alarmQueue = [];
 let alarmProcessing = false;
-const map = L.map('map').setView([50.586, 8.675], 12);
+const map = L.map('map').setView([50.517, 8.816], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '© OpenStreetMap'}).addTo(map);
 const vehicleMarkers = {};
 const incidentMarkers = {};
@@ -89,7 +89,7 @@ function fitMapToAll() {
         ...Object.values(incidentMarkers)
     ].filter(m => m);
     if (Object.keys(incidentMarkers).length === 0) {
-        map.setView([50.586, 8.675], 12);
+        map.setView([50.517, 8.816], 13);
     } else if (markers.length) {
         const group = new L.featureGroup(markers);
         map.fitBounds(group.getBounds().pad(0.05));
@@ -231,11 +231,11 @@ async function refresh() {
                 delete vehicleIcons[unit];
             }
             const prev = lastAlertInfo[unit] || {};
-            if (info.status < 3 && (info.note || info.location)) {
+            if ((info.status === 1 || info.status === 2) && (info.note || info.location)) {
                 if (info.note !== prev.note || info.location !== prev.location) {
                     triggerAlarm(unit, info);
                 }
-            } else if (info.status >= 3 && lastAlarmUnit === unit) {
+            } else if (info.status !== 1 && info.status !== 2 && lastAlarmUnit === unit) {
                 latestDiv.style.display = 'none';
                 lastAlarmUnit = null;
                 lastAlarmId = null;
