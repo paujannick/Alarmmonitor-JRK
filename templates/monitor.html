@@ -243,7 +243,7 @@ async function refresh() {
             if ((info.status === 1 || info.status === 2) && hasAlertInfo && !hadAlertInfo) {
                 triggerAlarm(unit, info);
             }
-            if (lastAlarmUnit === unit && (!hasAlertInfo || (info.status !== 1 && info.status !== 2))) {
+            if (lastAlarmUnit === unit && !hasAlertInfo) {
                 latestDiv.style.display = 'none';
                 lastAlarmUnit = null;
                 lastAlarmId = null;

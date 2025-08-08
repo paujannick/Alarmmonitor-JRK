@@ -248,10 +248,10 @@ def api_dispatch():
     data = request.json or {}
     unit = data.get('unit')
     status = int(data.get('status', 2))
-    note = data.get('note', '')
-    location = data.get('location', '')
-    lat = data.get('lat') or None
-    lon = data.get('lon') or None
+    note = data.get('note')
+    location = data.get('location')
+    lat = data.get('lat')
+    lon = data.get('lon')
     if unit in vehicles and status in STATUS_TEXT:
         if (lat is None or lon is None) and location:
             lat, lon = geocode(location)
@@ -261,11 +261,13 @@ def api_dispatch():
             inc.get('active') and unit in inc.get('vehicles', [])
             for inc in incidents
         )
-        if note or location or lat is not None or lon is not None:
-            info['note'] = note
-            info['location'] = location
-            info['lat'] = lat
-            info['lon'] = lon
+        if note is not None or location is not None or lat is not None or lon is not None:
+            if note is not None:
+                info['note'] = note
+            if location is not None:
+                info['location'] = location
+                info['lat'] = lat
+                info['lon'] = lon
         elif status == 2 and not active:
             info['note'] = ''
             info['location'] = info.get('base', '')
@@ -413,7 +415,6 @@ def api_delete_template(tid):
 @app.route('/api/incidents', methods=['POST'])
 def api_create_incident():
     data = request.json or {}
-    vehicles_assigned = data.get('vehicles', [])
     keyword = data.get('keyword', '')
     note = data.get('note', '')
     location = data.get('location', '')
@@ -427,7 +428,7 @@ def api_create_incident():
         'id': len(incidents) + 1,
         'start': datetime.utcnow().isoformat(),
         'end': None,
-        'vehicles': vehicles_assigned,
+        'vehicles': [],
         'keyword': keyword,
         'notes': [],
         'log': [],
@@ -442,17 +443,8 @@ def api_create_incident():
     }
     if note:
         incident['notes'].append({'time': datetime.utcnow().isoformat(), 'text': note})
-    for unit in vehicles_assigned:
-        incident['log'].append({'time': datetime.utcnow().isoformat(), 'unit': unit, 'status': 'alarmiert'})
-        if unit in vehicles:
-            info = vehicles[unit]
-            info['note'] = keyword
-            info['location'] = location
-            info['lat'] = lat
-            info['lon'] = lon
     incidents.append(incident)
     save_incidents()
-    save_vehicles()
     return jsonify({'ok': True, 'id': incident['id']})
 
 
