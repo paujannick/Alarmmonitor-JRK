@@ -240,11 +240,12 @@ async function refresh() {
                 delete vehicleIcons[unit];
             }
             const prev = lastAlertInfo[unit] || {};
-            if ((info.status === 1 || info.status === 2) && (info.note || info.location)) {
-                if (info.note !== prev.note || info.location !== prev.location) {
-                    triggerAlarm(unit, info);
-                }
-            } else if (info.status !== 1 && info.status !== 2 && lastAlarmUnit === unit) {
+            const hadAlertInfo = prev.note || prev.location;
+            const hasAlertInfo = info.note || info.location;
+            if ((info.status === 1 || info.status === 2) && hasAlertInfo && !hadAlertInfo) {
+                triggerAlarm(unit, info);
+            }
+            if (lastAlarmUnit === unit && (!hasAlertInfo || (info.status !== 1 && info.status !== 2))) {
                 latestDiv.style.display = 'none';
                 lastAlarmUnit = null;
                 lastAlarmId = null;
