@@ -21,7 +21,7 @@
   </div>
   <div class="col-md-3">
     <label class="form-label">Notiz</label>
-    <input type="text" name="note" class="form-control">
+    <textarea name="note" class="form-control" rows="2"></textarea>
   </div>
   <div class="col-12">
     <button class="btn btn-primary" type="submit">Starten</button>
@@ -50,7 +50,7 @@
         {% if inc.active %}
         <form class="note-form">
           <div class="input-group input-group-sm">
-            <input type="text" name="text" class="form-control" placeholder="Notiz">
+            <textarea name="text" class="form-control" rows="2" placeholder="Notiz"></textarea>
             <button class="btn btn-secondary" type="submit">Hinzufügen</button>
           </div>
         </form>
@@ -117,7 +117,7 @@ document.querySelectorAll('#incident-list .note-form').forEach(form => {
     e.preventDefault();
     const tr = e.target.closest('tr');
     const id = tr.dataset.id;
-    const text = form.querySelector('input[name="text"]').value;
+      const text = form.querySelector('[name="text"]').value;
     const res = await fetch(`/api/incidents/${id}/notes`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},

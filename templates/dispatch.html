@@ -3,7 +3,7 @@
 <h1 class="mb-4">Leitstellen Interface</h1>
 <h2>Status ändern</h2>
 <form id="dispatch-form" class="row g-3 mb-4">
-    <div class="col-md-3">
+    <div class="col-md-4">
         <label class="form-label">Fahrzeug</label>
         <select name="unit" class="form-select">
             {% for name in vehicles.keys() %}
@@ -11,21 +11,13 @@
             {% endfor %}
         </select>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-4">
         <label class="form-label">Status</label>
         <select name="status" class="form-select">
             {% for code, text in status_text.items() %}
             <option value="{{ code }}">{{ code }} - {{ text }}</option>
             {% endfor %}
         </select>
-    </div>
-    <div class="col-md-3">
-        <label class="form-label">Alarmtext</label>
-        <input type="text" name="note" class="form-control">
-    </div>
-    <div class="col-md-3">
-        <label class="form-label">Ort</label>
-        <input type="text" name="location" class="form-control">
     </div>
     <div class="col-12">
         <button type="submit" class="btn btn-primary">Senden</button>
@@ -42,6 +34,10 @@
     <div class="col-md-3">
         <label class="form-label">Stichwort</label>
         <input type="text" name="keyword" class="form-control">
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Notiz</label>
+        <textarea name="note" class="form-control" rows="2"></textarea>
     </div>
     <div class="col-12">
         <label class="form-label">Fahrzeuge</label>
@@ -61,6 +57,24 @@
     </div>
 </form>
 <div id="alarm-result" class="mt-3"></div>
+
+<h2 class="mt-5">Einsätze</h2>
+<table class="table table-striped" id="incident-list">
+  <thead>
+    <tr><th>ID</th><th>Fahrzeuge</th><th>Ort</th><th>Stichwort</th><th>Aktiv</th></tr>
+  </thead>
+  <tbody>
+  {% for inc in incidents %}
+    <tr>
+      <td>{{ inc.id }}</td>
+      <td>{{ inc.vehicles|join(', ') }}</td>
+      <td>{{ inc.location.name }}</td>
+      <td>{{ inc.keyword }}</td>
+      <td>{{ 'Ja' if inc.active else 'Nein' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -92,5 +106,7 @@ alarmForm.addEventListener('submit', async (e) => {
     const data = await res.json();
     document.getElementById('alarm-result').textContent = data.ok ? 'Alarm gesendet' : 'Fehler';
 });
+
+setInterval(() => window.location.reload(), 10000);
 </script>
 {% endblock %}

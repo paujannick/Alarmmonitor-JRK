@@ -43,13 +43,24 @@ DEFAULT_VEHICLES = {
 }
 
 STATUS_TEXT = {
-    0: 'außer Dienst',
-    1: 'einsatzbereit über Funk',
-    2: 'einsatzbereit auf Wache',
-    3: 'Einsatz übernommen',
+    0: 'prio. Sprechwunsch',
+    1: 'Frei auf Funk',
+    2: 'Frei auf Wache',
+    3: 'Auf Anfahrt',
     4: 'Am Einsatzort',
-    5: 'Patient aufgenommen',
-    6: 'Am Ziel',
+    41: 'Einsatzbereit am Einsatzort',
+    5: 'Sprechwunsch',
+    51: 'Anfrage Pause',
+    6: 'nicht Einsatzbereit',
+    61: 'Dienstende',
+    62: 'unbesetzt',
+    68: 'Desinfektion',
+    69: 'Pause',
+    7: 'gebunden',
+    71: 'Abkömmlich',
+    77: 'Sonder und Wegerechte',
+    8: 'Bedingt Einsatzbereit',
+    9: 'Fremdanmeldung',
 }
 
 
@@ -105,7 +116,13 @@ def index():
 
 @app.route('/dispatch')
 def dispatch():
-    return render_template('dispatch.html', title='Leitstelle', vehicles=vehicles, status_text=STATUS_TEXT)
+    return render_template(
+        'dispatch.html',
+        title='Leitstelle',
+        vehicles=vehicles,
+        status_text=STATUS_TEXT,
+        incidents=incidents,
+    )
 
 
 @app.route('/vehicles')
