@@ -7,7 +7,7 @@ Komplettlösung für einen webbasierten Alarmmonitor und ein Leitstellen-Interfa
 - Leitstellenoberfläche zum Setzen von Status sowie zum Auslösen von Alarmen mit Stichwort, Einsatzort, Koordinaten und Auswahl mehrerer Fahrzeuge
 - Farbige Darstellung der Status für schnelle Übersicht
 - Persistente Speicherung der Fahrzeugdaten in `data/vehicles.json`
-- Alarmgong und Sprachausgabe des Alarmtextes bei neuen Einsätzen
+- Alarmgong und Sprachausgabe des Alarmtextes bei neuen Einsätzen (Web Speech API mit Google TTS-Fallback)
 - Fahrzeugverwaltung zum Hinzufügen und Entfernen von Einheiten inklusive Funkrufnamen und Besatzung
 - Einsatzdokumentation in `data/incidents.json` mit Einsatztagebuch, Fahrzeugzuordnung und manueller Start/Beendigung
 - Alarmmonitor im Vollbildmodus mit Kartenansicht, Fahrzeugpositionen und versteckter Menüleiste im Vollbild
