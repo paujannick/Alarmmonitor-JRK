@@ -134,6 +134,7 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
         <button type="button" class="btn btn-primary" id="incident-save">Speichern</button>
+        <button type="button" class="btn btn-danger" id="incident-alert">Alarmieren</button>
       </div>
     </div>
   </div>
@@ -214,8 +215,7 @@ document.getElementById('incident-save').addEventListener('click', async () => {
     keyword: f.keyword.value,
     location: f.location.value,
     priority: f.priority.value,
-    patient: f.patient.value,
-    vehicles: Array.from(f.querySelectorAll('input[name="vehicles"]:checked')).map(cb => cb.value)
+    patient: f.patient.value
   };
   const note = f.note.value.trim();
   if (note) payload.note = note;
@@ -231,6 +231,45 @@ document.getElementById('incident-save').addEventListener('click', async () => {
     incidentModal.hide();
     window.location.reload();
   }
+});
+
+document.getElementById('incident-alert').addEventListener('click', async () => {
+  const f = document.getElementById('incident-form');
+  let id = f.elements['id'].value;
+  const details = {
+    keyword: f.keyword.value,
+    location: f.location.value,
+    priority: f.priority.value,
+    patient: f.patient.value
+  };
+  const note = f.note.value.trim();
+  if (note) details.note = note;
+  if (id) {
+    await fetch(`/api/incidents/${id}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(details)
+    });
+  } else {
+    const res = await fetch('/api/incidents', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(details)
+    });
+    const r = await res.json();
+    if (!r.ok) return;
+    id = r.id;
+  }
+  const units = Array.from(f.querySelectorAll('input[name="vehicles"]:checked')).map(cb => cb.value);
+  if (units.length) {
+    await fetch(`/api/incidents/${id}/alert`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({units})
+    });
+  }
+  incidentModal.hide();
+  window.location.reload();
 });
 
 const templateList = {{ templates|tojson }};
