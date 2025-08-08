@@ -32,7 +32,7 @@
   </thead>
   <tbody>
   {% for name, info in vehicles.items() %}
-    <tr data-unit="{{ name }}">
+    <tr data-unit="{{ name }}" class="status-{{ info.status }}">
       <td>{{ name }}</td>
       <td><input type="text" class="form-control form-control-sm name" value="{{ info.name }}"></td>
       <td><input type="text" class="form-control form-control-sm callsign" value="{{ info.callsign }}"></td>

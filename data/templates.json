@@ -1,0 +1,5 @@
+[
+  {"id": "bma", "label": "Brandmeldeanlage", "keyword": "Brandmeldeanlage", "priority": "R1"},
+  {"id": "vu", "label": "Verkehrsunfall", "keyword": "Verkehrsunfall", "priority": "R1"},
+  {"id": "rd", "label": "Medizinischer Notfall", "keyword": "Medizinischer Notfall", "priority": "R2"}
+]

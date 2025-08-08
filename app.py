@@ -24,6 +24,7 @@ app.logger.setLevel(logging.INFO)
 
 DATA_FILE = Path('data/vehicles.json')
 INCIDENT_FILE = Path('data/incidents.json')
+TEMPLATE_FILE = Path('data/templates.json')
 DEFAULT_VEHICLES = {
     'RTW1': {
         'name': 'Rettungswagen 1',
@@ -36,6 +37,7 @@ DEFAULT_VEHICLES = {
         'lon': None,
         'icon': None,
         'tts': '',
+        'base': '',
     },
     'RTW2': {
         'name': 'Rettungswagen 2',
@@ -48,6 +50,7 @@ DEFAULT_VEHICLES = {
         'lon': None,
         'icon': None,
         'tts': '',
+        'base': '',
     },
     'KTW1': {
         'name': 'Krankentransportwagen 1',
@@ -60,6 +63,7 @@ DEFAULT_VEHICLES = {
         'lon': None,
         'icon': None,
         'tts': '',
+        'base': '',
     },
 }
 
@@ -92,6 +96,7 @@ def load_vehicles():
                 info.setdefault('lon', None)
                 info.setdefault('icon', None)
                 info.setdefault('tts', '')
+                info.setdefault('base', '')
             return data
     data = DEFAULT_VEHICLES.copy()
     return data
@@ -122,8 +127,45 @@ def save_incidents():
     notify_change()
 
 
+DEFAULT_TEMPLATES = [
+    {
+        'id': 'bma',
+        'label': 'Brandmeldeanlage',
+        'keyword': 'Brandmeldeanlage',
+        'priority': 'R1',
+    },
+    {
+        'id': 'vu',
+        'label': 'Verkehrsunfall',
+        'keyword': 'Verkehrsunfall',
+        'priority': 'R1',
+    },
+    {
+        'id': 'rd',
+        'label': 'Medizinischer Notfall',
+        'keyword': 'Medizinischer Notfall',
+        'priority': 'R2',
+    },
+]
+
+
+def load_templates():
+    if TEMPLATE_FILE.exists():
+        with open(TEMPLATE_FILE, encoding='utf-8') as f:
+            return json.load(f)
+    return DEFAULT_TEMPLATES.copy()
+
+
+def save_templates():
+    TEMPLATE_FILE.parent.mkdir(exist_ok=True)
+    with open(TEMPLATE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(templates, f, ensure_ascii=False, indent=2)
+    notify_change()
+
+
 vehicles = load_vehicles()
 incidents = load_incidents()
+templates = load_templates()
 
 listeners = []
 
@@ -183,9 +225,11 @@ def dispatch():
     return render_template(
         'dispatch.html',
         title='Leitstelle',
-        vehicles=available,
+        vehicles=vehicles,
+        available=available,
         status_text=STATUS_TEXT,
         incidents=sorted_incidents,
+        templates=templates,
     )
 
 
@@ -222,6 +266,13 @@ def api_dispatch():
             info['location'] = location
             info['lat'] = lat
             info['lon'] = lon
+        elif status == 2 and not active:
+            info['note'] = ''
+            info['location'] = info.get('base', '')
+            if info['location']:
+                info['lat'], info['lon'] = geocode(info['location'])
+            else:
+                info['lat'] = info['lon'] = None
         elif not active:
             info['note'] = ''
             info['location'] = ''
@@ -260,6 +311,7 @@ def api_add_vehicle():
             'lon': None,
             'icon': None,
             'tts': tts,
+            'base': '',
         }
         save_vehicles()
         return jsonify({'ok': True})
@@ -276,6 +328,7 @@ def api_update_vehicle(unit):
     callsign = data.get('callsign')
     crew = data.get('crew')
     tts = data.get('tts')
+    base = data.get('base')
     if name is not None:
         info['name'] = name
     if callsign is not None:
@@ -284,6 +337,8 @@ def api_update_vehicle(unit):
         info['crew'] = crew
     if tts is not None:
         info['tts'] = tts
+    if base is not None:
+        info['base'] = base
     save_vehicles()
     return jsonify({'ok': True})
 
@@ -318,6 +373,41 @@ def api_delete_vehicle(unit):
 @app.route('/api/incidents', methods=['GET'])
 def api_list_incidents():
     return jsonify(incidents)
+
+
+@app.route('/api/templates', methods=['GET'])
+def api_list_templates():
+    return jsonify(templates)
+
+
+@app.route('/api/templates', methods=['POST'])
+def api_save_template():
+    data = request.json or {}
+    tid = data.get('id')
+    if not tid:
+        return jsonify({'ok': False}), 400
+    existing = next((t for t in templates if t.get('id') == tid), None)
+    if existing:
+        existing.update({k: v for k, v in data.items() if k in ('label', 'keyword', 'priority')})
+    else:
+        templates.append({
+            'id': tid,
+            'label': data.get('label', tid),
+            'keyword': data.get('keyword', ''),
+            'priority': data.get('priority', ''),
+        })
+    save_templates()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/templates/<tid>', methods=['DELETE'])
+def api_delete_template(tid):
+    for i, t in enumerate(templates):
+        if t.get('id') == tid:
+            templates.pop(i)
+            save_templates()
+            return jsonify({'ok': True})
+    return jsonify({'ok': False}), 404
 
 
 @app.route('/api/incidents', methods=['POST'])
@@ -508,7 +598,7 @@ def api_update_incident(inc_id):
 
 @app.route('/settings')
 def settings():
-    return render_template('settings.html', title='Einstellungen', vehicles=vehicles)
+    return render_template('settings.html', title='Einstellungen', vehicles=vehicles, templates=templates)
 
 
 @app.route('/download-log')
