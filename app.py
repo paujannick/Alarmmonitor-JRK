@@ -9,9 +9,36 @@ app.config['JSON_AS_ASCII'] = False
 DATA_FILE = Path('data/vehicles.json')
 INCIDENT_FILE = Path('data/incidents.json')
 DEFAULT_VEHICLES = {
-    'RTW1': {'status': 2, 'note': '', 'location': ''},
-    'RTW2': {'status': 2, 'note': '', 'location': ''},
-    'KTW1': {'status': 2, 'note': '', 'location': ''},
+    'RTW1': {
+        'name': 'Rettungswagen 1',
+        'callsign': 'Rotkreuz RTW 1',
+        'crew': [],
+        'status': 2,
+        'note': '',
+        'location': '',
+        'lat': None,
+        'lon': None,
+    },
+    'RTW2': {
+        'name': 'Rettungswagen 2',
+        'callsign': 'Rotkreuz RTW 2',
+        'crew': [],
+        'status': 2,
+        'note': '',
+        'location': '',
+        'lat': None,
+        'lon': None,
+    },
+    'KTW1': {
+        'name': 'Krankentransportwagen 1',
+        'callsign': 'Rotkreuz KTW 1',
+        'crew': [],
+        'status': 2,
+        'note': '',
+        'location': '',
+        'lat': None,
+        'lon': None,
+    },
 }
 
 STATUS_TEXT = {
@@ -72,7 +99,7 @@ def vehicles_page():
 
 @app.route('/incidents')
 def incidents_page():
-    return render_template('incidents.html', title='Einsätze', incidents=incidents)
+    return render_template('incidents.html', title='Einsätze', incidents=incidents, vehicles=vehicles)
 
 
 @app.route('/api/status')
@@ -87,20 +114,32 @@ def api_dispatch():
     status = int(data.get('status', 2))
     note = data.get('note', '')
     location = data.get('location', '')
+    lat = data.get('lat')
+    lon = data.get('lon')
     if unit in vehicles and status in STATUS_TEXT:
-        vehicles[unit]['status'] = status
-        vehicles[unit]['note'] = note
-        vehicles[unit]['location'] = location
+        info = vehicles[unit]
+        info['status'] = status
+        info['note'] = note
+        info['location'] = location
+        info['lat'] = lat
+        info['lon'] = lon
         save_vehicles()
         if status >= 3:
             incident = {
                 'id': len(incidents) + 1,
-                'time': datetime.utcnow().isoformat(),
-                'unit': unit,
-                'note': note,
-                'location': location,
-                'status': status,
+                'start': datetime.utcnow().isoformat(),
+                'end': None,
+                'vehicles': [unit],
+                'notes': [],
+                'location': {
+                    'name': location,
+                    'lat': lat,
+                    'lon': lon,
+                },
+                'active': True,
             }
+            if note:
+                incident['notes'].append({'time': datetime.utcnow().isoformat(), 'text': note})
             incidents.append(incident)
             save_incidents()
         return jsonify({'ok': True})
@@ -111,8 +150,20 @@ def api_dispatch():
 def api_add_vehicle():
     data = request.json or {}
     unit = data.get('unit')
+    name = data.get('name', unit)
+    callsign = data.get('callsign', '')
+    crew = data.get('crew', [])
     if unit and unit not in vehicles:
-        vehicles[unit] = {'status': 2, 'note': '', 'location': ''}
+        vehicles[unit] = {
+            'name': name,
+            'callsign': callsign,
+            'crew': crew,
+            'status': 2,
+            'note': '',
+            'location': '',
+            'lat': None,
+            'lon': None,
+        }
         save_vehicles()
         return jsonify({'ok': True})
     return jsonify({'ok': False}), 400
@@ -124,6 +175,58 @@ def api_delete_vehicle(unit):
         del vehicles[unit]
         save_vehicles()
         return jsonify({'ok': True})
+    return jsonify({'ok': False}), 404
+
+
+@app.route('/api/incidents', methods=['POST'])
+def api_create_incident():
+    data = request.json or {}
+    vehicles_assigned = data.get('vehicles', [])
+    note = data.get('note', '')
+    location = data.get('location', '')
+    lat = data.get('lat')
+    lon = data.get('lon')
+    incident = {
+        'id': len(incidents) + 1,
+        'start': datetime.utcnow().isoformat(),
+        'end': None,
+        'vehicles': vehicles_assigned,
+        'notes': [],
+        'location': {
+            'name': location,
+            'lat': lat,
+            'lon': lon,
+        },
+        'active': True,
+    }
+    if note:
+        incident['notes'].append({'time': datetime.utcnow().isoformat(), 'text': note})
+    incidents.append(incident)
+    save_incidents()
+    return jsonify({'ok': True, 'id': incident['id']})
+
+
+@app.route('/api/incidents/<int:inc_id>/notes', methods=['POST'])
+def api_add_note(inc_id):
+    data = request.json or {}
+    text = data.get('text')
+    if text:
+        for inc in incidents:
+            if inc['id'] == inc_id and inc.get('active'):
+                inc['notes'].append({'time': datetime.utcnow().isoformat(), 'text': text})
+                save_incidents()
+                return jsonify({'ok': True})
+    return jsonify({'ok': False}), 404
+
+
+@app.route('/api/incidents/<int:inc_id>/end', methods=['POST'])
+def api_end_incident(inc_id):
+    for inc in incidents:
+        if inc['id'] == inc_id and inc.get('active'):
+            inc['active'] = False
+            inc['end'] = datetime.utcnow().isoformat()
+            save_incidents()
+            return jsonify({'ok': True})
     return jsonify({'ok': False}), 404
 
 
