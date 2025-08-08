@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
 <h1 class="mb-4">Alarmmonitor</h1>
+<div id="latest-incident" class="alert alert-danger display-4" style="display:none;"></div>
 <table class="table table-striped" id="vehicle-table">
     <thead>
         <tr>
@@ -31,6 +32,7 @@ for (const [unit, info] of Object.entries({{ vehicles|tojson }})) {
     lastStatus[unit] = info.status;
 }
 const alarmSound = document.getElementById('alarm');
+const latestDiv = document.getElementById('latest-incident');
 
 function speak(text) {
     if ('speechSynthesis' in window) {
@@ -39,13 +41,15 @@ function speak(text) {
     }
 }
 
-function triggerAlarm(info) {
+function triggerAlarm(unit, info) {
     alarmSound.currentTime = 0;
     alarmSound.play();
     const text = `${info.note || ''} ${info.location || ''}`.trim();
     if (text) {
         speak(text);
     }
+    latestDiv.innerHTML = `<strong>${unit}</strong> ${text}`;
+    latestDiv.style.display = 'block';
 }
 
 async function refresh() {
@@ -59,7 +63,7 @@ async function refresh() {
             row.querySelector('.note').textContent = info.note;
             row.querySelector('.location').textContent = info.location;
             if (lastStatus[unit] !== undefined && lastStatus[unit] < 3 && info.status >= 3) {
-                triggerAlarm(info);
+                triggerAlarm(unit, info);
             }
             lastStatus[unit] = info.status;
         }
