@@ -139,19 +139,23 @@ function triggerAlarm(unit, info) {
     if (alarmId === lastAlarmId) return;
     lastAlarmId = alarmId;
     lastAlarmUnit = unit;
-    const text = `${info.note || ''} ${info.location || ''}`.trim() || unit;
+    const parts = [unit];
+    if (info.note) parts.push(info.note);
+    if (info.location) parts.push(info.location);
+    const speechText = parts.join('. ');
+    const displayText = `${info.note || ''} ${info.location || ''}`.trim();
     if (audioUnlocked) {
         alarmSound.currentTime = 0;
         alarmSound.play().catch(() => {});
         alarmSound.onended = () => {
-            setTimeout(() => speak(text), 500);
+            setTimeout(() => speak(speechText), 500);
             alarmSound.onended = null;
         };
     } else {
         enableBtn.style.display = '';
-        speak(text);
+        speak(speechText);
     }
-    latestDiv.innerHTML = `<strong>${unit}</strong> ${text}`;
+    latestDiv.innerHTML = `<strong>${unit}</strong> ${displayText}`;
     latestDiv.style.display = 'block';
     if (info.lat && info.lon) {
         if (vehicleMarkers[unit]) {
