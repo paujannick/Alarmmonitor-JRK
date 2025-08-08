@@ -5,7 +5,6 @@
 {% block content %}
 <h1 class="mb-4">Alarmmonitor</h1>
 <button id="fullscreen" class="btn btn-secondary mb-3">Vollbild</button>
-<button id="refresh" class="btn btn-primary mb-3 ms-2">Aktualisieren</button>
 <div id="latest-incident" class="alert alert-danger display-4" style="display:none;"></div>
 <div class="row">
   <div class="col-md-6">
@@ -16,6 +15,7 @@
         <thead>
             <tr>
                 <th>Fahrzeug</th>
+                <th>Icon</th>
                 <th>Status</th>
                 <th>Hinweis</th>
                 <th>Ort</th>
@@ -25,6 +25,7 @@
         {% for name, info in vehicles.items() %}
             <tr data-unit="{{ name }}" class="status-{{ info.status }}">
                 <td>{{ name }}</td>
+                <td class="icon-cell">{% if info.icon %}<img src="{{ url_for('static', filename=info.icon) }}" height="24">{% endif %}</td>
                 <td class="status-text">{{ info.status }} - {{ status_text[info.status] }}</td>
                 <td class="note">{{ info.note }}</td>
                 <td class="location">{{ info.location }}</td>
@@ -41,8 +42,12 @@
 <script>
 const statusText = {{ status_text|tojson }};
 const lastStatus = {};
+const vehicleIcons = {};
 for (const [unit, info] of Object.entries({{ vehicles|tojson }})) {
     lastStatus[unit] = info.status;
+    if (info.icon) {
+        vehicleIcons[unit] = L.icon({iconUrl:`/static/${info.icon}`, iconSize:[32,32], iconAnchor:[16,16]});
+    }
 }
 const alarmSound = document.getElementById('alarm');
 const latestDiv = document.getElementById('latest-incident');
@@ -59,6 +64,7 @@ const icons = {
 };
 const incidentIcon = new L.Icon({iconUrl: iconBase + 'marker-icon-green.png', shadowUrl: iconBase + 'marker-shadow.png', iconSize:[25,41], iconAnchor:[12,41], popupAnchor:[1,-34], shadowSize:[41,41]});
 function getIcon(unit) {
+  if (vehicleIcons[unit]) return vehicleIcons[unit];
   if (unit.startsWith('RTW')) return icons.RTW;
   if (unit.startsWith('KTW')) return icons.KTW;
   return icons.default;
@@ -105,6 +111,7 @@ function triggerAlarm(unit, info) {
         map.setView([info.lat, info.lon], 13);
         if (vehicleMarkers[unit]) {
             vehicleMarkers[unit].setLatLng([info.lat, info.lon]);
+            vehicleMarkers[unit].setIcon(getIcon(unit));
         } else {
             vehicleMarkers[unit] = L.marker([info.lat, info.lon], {icon: getIcon(unit)}).addTo(map).bindPopup(unit);
         }
@@ -125,6 +132,14 @@ async function refresh() {
             row.querySelector('.status-text').textContent = `${info.status} - ${statusText[info.status]}`;
             row.querySelector('.note').textContent = info.note;
             row.querySelector('.location').textContent = info.location;
+            const iconCell = row.querySelector('.icon-cell');
+            if (info.icon) {
+                iconCell.innerHTML = `<img src="/static/${info.icon}" height="24">`;
+                vehicleIcons[unit] = L.icon({iconUrl:`/static/${info.icon}`, iconSize:[32,32], iconAnchor:[16,16]});
+            } else {
+                iconCell.innerHTML = '';
+                delete vehicleIcons[unit];
+            }
             if (lastStatus[unit] !== undefined && lastStatus[unit] < 3 && info.status >= 3) {
                 triggerAlarm(unit, info);
             }
@@ -132,6 +147,7 @@ async function refresh() {
             if (info.lat && info.lon) {
                 if (vehicleMarkers[unit]) {
                     vehicleMarkers[unit].setLatLng([info.lat, info.lon]);
+                    vehicleMarkers[unit].setIcon(getIcon(unit));
                 } else {
                     vehicleMarkers[unit] = L.marker([info.lat, info.lon], {icon: getIcon(unit)}).addTo(map).bindPopup(unit);
                 }
@@ -157,6 +173,8 @@ async function refresh() {
         }
     }
 }
-document.getElementById('refresh').addEventListener('click', refresh);
+const evtSource = new EventSource('/events');
+evtSource.onmessage = () => refresh();
+refresh();
 </script>
 {% endblock %}

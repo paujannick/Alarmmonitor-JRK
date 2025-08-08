@@ -24,7 +24,7 @@
 </form>
 <table class="table table-striped" id="vehicle-list">
   <thead>
-    <tr><th>Kurzname</th><th>Funkrufname</th><th>Besatzung</th><th>Status</th><th>Aktion</th></tr>
+    <tr><th>Kurzname</th><th>Funkrufname</th><th>Besatzung</th><th>Status</th><th>Icon</th><th>Aktion</th></tr>
   </thead>
   <tbody>
   {% for name, info in vehicles.items() %}
@@ -33,6 +33,13 @@
       <td>{{ info.callsign }}</td>
       <td>{{ info.crew|join(', ') }}</td>
       <td>{{ info.status }}</td>
+      <td class="icon-cell">
+        {% if info.icon %}<img src="{{ url_for('static', filename=info.icon) }}" height="32" class="mb-1">{% endif %}
+        <form class="icon-form" enctype="multipart/form-data">
+          <input type="file" name="icon" accept="image/*" class="form-control form-control-sm mb-1">
+          <button class="btn btn-sm btn-secondary">Upload</button>
+        </form>
+      </td>
       <td><button class="btn btn-sm btn-danger delete">Löschen</button></td>
     </tr>
   {% endfor %}
@@ -68,6 +75,22 @@ document.querySelectorAll('#vehicle-list .delete').forEach(btn => {
     const r = await res.json();
     if (r.ok) {
       e.target.closest('tr').remove();
+    }
+  });
+});
+
+document.querySelectorAll('#vehicle-list .icon-form').forEach(form => {
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const unit = form.closest('tr').dataset.unit;
+    const fd = new FormData(form);
+    const res = await fetch(`/api/vehicles/${unit}/icon`, {
+      method: 'POST',
+      body: fd
+    });
+    const r = await res.json();
+    if (r.ok) {
+      location.reload();
     }
   });
 });
