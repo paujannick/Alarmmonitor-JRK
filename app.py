@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify
 import json
 from pathlib import Path
 from datetime import datetime
+from urllib import parse, request as urlrequest
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
@@ -82,6 +83,21 @@ vehicles = load_vehicles()
 incidents = load_incidents()
 
 
+def geocode(address):
+    if not address:
+        return None, None
+    query = parse.urlencode({'q': address, 'format': 'json'})
+    url = f"https://nominatim.openstreetmap.org/search?{query}"
+    try:
+        with urlrequest.urlopen(url, timeout=5) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            if data:
+                return float(data[0]['lat']), float(data[0]['lon'])
+    except Exception:
+        pass
+    return None, None
+
+
 @app.route('/')
 def index():
     return render_template('monitor.html', title='Alarmmonitor', vehicles=vehicles, status_text=STATUS_TEXT)
@@ -99,7 +115,7 @@ def vehicles_page():
 
 @app.route('/incidents')
 def incidents_page():
-    return render_template('incidents.html', title='Einsätze', incidents=incidents, vehicles=vehicles)
+    return render_template('incidents.html', title='Einsätze', incidents=incidents, vehicles=vehicles, status_text=STATUS_TEXT)
 
 
 @app.route('/api/status')
@@ -114,16 +130,26 @@ def api_dispatch():
     status = int(data.get('status', 2))
     note = data.get('note', '')
     location = data.get('location', '')
-    lat = data.get('lat')
-    lon = data.get('lon')
+    lat = data.get('lat') or None
+    lon = data.get('lon') or None
     if unit in vehicles and status in STATUS_TEXT:
+        if (lat is None or lon is None) and location:
+            lat, lon = geocode(location)
         info = vehicles[unit]
         info['status'] = status
         info['note'] = note
         info['location'] = location
         info['lat'] = lat
         info['lon'] = lon
+        for inc in incidents:
+            if inc.get('active') and unit in inc.get('vehicles', []):
+                inc.setdefault('log', []).append({
+                    'time': datetime.utcnow().isoformat(),
+                    'unit': unit,
+                    'status': status,
+                })
         save_vehicles()
+        save_incidents()
         return jsonify({'ok': True})
     return jsonify({'ok': False}), 400
 
@@ -167,8 +193,10 @@ def api_create_incident():
     keyword = data.get('keyword', '')
     note = data.get('note', '')
     location = data.get('location', '')
-    lat = data.get('lat')
-    lon = data.get('lon')
+    lat = data.get('lat') or None
+    lon = data.get('lon') or None
+    if (lat is None or lon is None) and location:
+        lat, lon = geocode(location)
     incident = {
         'id': len(incidents) + 1,
         'start': datetime.utcnow().isoformat(),
@@ -176,6 +204,7 @@ def api_create_incident():
         'vehicles': vehicles_assigned,
         'keyword': keyword,
         'notes': [],
+        'log': [],
         'location': {
             'name': location,
             'lat': lat,
@@ -185,9 +214,8 @@ def api_create_incident():
     }
     if note:
         incident['notes'].append({'time': datetime.utcnow().isoformat(), 'text': note})
-    incidents.append(incident)
-    save_incidents()
     for unit in vehicles_assigned:
+        incident['log'].append({'time': datetime.utcnow().isoformat(), 'unit': unit, 'status': 'alarmiert'})
         if unit in vehicles:
             info = vehicles[unit]
             info['status'] = 3
@@ -195,6 +223,8 @@ def api_create_incident():
             info['location'] = location
             info['lat'] = lat
             info['lon'] = lon
+    incidents.append(incident)
+    save_incidents()
     save_vehicles()
     return jsonify({'ok': True, 'id': incident['id']})
 
@@ -219,6 +249,43 @@ def api_end_incident(inc_id):
             inc['active'] = False
             inc['end'] = datetime.utcnow().isoformat()
             save_incidents()
+            return jsonify({'ok': True})
+    return jsonify({'ok': False}), 404
+
+
+@app.route('/api/incidents/<int:inc_id>', methods=['DELETE'])
+def api_delete_incident(inc_id):
+    for i, inc in enumerate(incidents):
+        if inc['id'] == inc_id:
+            incidents.pop(i)
+            save_incidents()
+            return jsonify({'ok': True})
+    return jsonify({'ok': False}), 404
+
+
+@app.route('/api/incidents/<int:inc_id>/alert', methods=['POST'])
+def api_alert_incident(inc_id):
+    data = request.json or {}
+    units = data.get('units', [])
+    for inc in incidents:
+        if inc['id'] == inc_id and inc.get('active'):
+            for unit in units:
+                if unit not in inc['vehicles']:
+                    inc['vehicles'].append(unit)
+                    inc.setdefault('log', []).append({
+                        'time': datetime.utcnow().isoformat(),
+                        'unit': unit,
+                        'status': 'alarmiert',
+                    })
+                    if unit in vehicles:
+                        info = vehicles[unit]
+                        info['status'] = 3
+                        info['note'] = inc['keyword']
+                        info['location'] = inc['location']['name']
+                        info['lat'] = inc['location']['lat']
+                        info['lon'] = inc['location']['lon']
+            save_incidents()
+            save_vehicles()
             return jsonify({'ok': True})
     return jsonify({'ok': False}), 404
 
