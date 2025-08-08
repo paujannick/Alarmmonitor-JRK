@@ -221,8 +221,7 @@ def dispatch():
     available = {
         name: info
         for name, info in vehicles.items()
-        if info.get('status') in (1, 2)
-        and not any(
+        if not any(
             inc.get('active') and name in inc.get('vehicles', []) for inc in incidents
         )
     }
@@ -506,6 +505,11 @@ def api_alert_incident(inc_id):
     for inc in incidents:
         if inc['id'] == inc_id and inc.get('active'):
             for unit in units:
+                if any(
+                    other.get('active') and unit in other.get('vehicles', [])
+                    for other in incidents
+                ):
+                    continue
                 if unit not in inc['vehicles']:
                     inc['vehicles'].append(unit)
                     inc.setdefault('log', []).append({
