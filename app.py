@@ -1,12 +1,25 @@
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify, Response, send_file
 import json
 from pathlib import Path
 from datetime import datetime
 from urllib import parse, request as urlrequest
 from queue import Queue
+import logging
+import functools
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
+
+LOG_FILE = Path('error.log')
+LOG_FILE.touch(exist_ok=True)
+file_handler = logging.FileHandler(LOG_FILE)
+file_handler.setLevel(logging.ERROR)
+file_handler.setFormatter(
+    logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+    )
+)
+app.logger.addHandler(file_handler)
 
 DATA_FILE = Path('data/vehicles.json')
 INCIDENT_FILE = Path('data/incidents.json')
@@ -371,6 +384,33 @@ def api_alert_incident(inc_id):
             save_vehicles()
             return jsonify({'ok': True})
     return jsonify({'ok': False}), 404
+
+
+@app.route('/settings')
+def settings():
+    return render_template('settings.html', title='Einstellungen')
+
+
+@app.route('/download-log')
+def download_log():
+    return send_file(LOG_FILE, as_attachment=True)
+
+
+def log_errors(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception:
+            app.logger.exception('Error in %s', func.__name__)
+            raise
+
+    return wrapper
+
+
+for name, func in list(app.view_functions.items()):
+    if name != 'static':
+        app.view_functions[name] = log_errors(func)
 
 
 if __name__ == '__main__':
