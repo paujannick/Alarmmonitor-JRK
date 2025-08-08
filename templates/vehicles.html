@@ -2,9 +2,21 @@
 {% block content %}
 <h1 class="mb-4">Fahrzeugverwaltung</h1>
 <form id="add-vehicle" class="row g-3 mb-4">
-  <div class="col-md-6">
-    <label class="form-label">Fahrzeugname</label>
+  <div class="col-md-3">
+    <label class="form-label">Kurzname</label>
     <input type="text" name="unit" class="form-control" required>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Name</label>
+    <input type="text" name="name" class="form-control">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Funkrufname</label>
+    <input type="text" name="callsign" class="form-control">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Besatzung (kommagetrennt)</label>
+    <input type="text" name="crew" class="form-control">
   </div>
   <div class="col-12">
     <button type="submit" class="btn btn-primary">Hinzufügen</button>
@@ -12,12 +24,14 @@
 </form>
 <table class="table table-striped" id="vehicle-list">
   <thead>
-    <tr><th>Name</th><th>Status</th><th>Aktion</th></tr>
+    <tr><th>Kurzname</th><th>Funkrufname</th><th>Besatzung</th><th>Status</th><th>Aktion</th></tr>
   </thead>
   <tbody>
   {% for name, info in vehicles.items() %}
     <tr data-unit="{{ name }}">
       <td>{{ name }}</td>
+      <td>{{ info.callsign }}</td>
+      <td>{{ info.crew|join(', ') }}</td>
       <td>{{ info.status }}</td>
       <td><button class="btn btn-sm btn-danger delete">Löschen</button></td>
     </tr>
@@ -30,8 +44,17 @@
 const form = document.getElementById('add-vehicle');
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const data = Object.fromEntries(new FormData(form).entries());
-  const res = await fetch('/api/vehicles', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+  const formData = Object.fromEntries(new FormData(form).entries());
+  if (formData.crew) {
+    formData.crew = formData.crew.split(',').map(s => s.trim()).filter(Boolean);
+  } else {
+    formData.crew = [];
+  }
+  const res = await fetch('/api/vehicles', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(formData)
+  });
   const r = await res.json();
   if (r.ok) {
     location.reload();

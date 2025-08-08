@@ -1,21 +1,126 @@
 {% extends 'base.html' %}
 {% block content %}
 <h1 class="mb-4">Einsatzdokumentation</h1>
-<table class="table table-striped">
+
+<form id="new-incident" class="row g-3 mb-4">
+  <div class="col-md-3">
+    <label class="form-label">Fahrzeuge</label>
+    <select name="vehicles" class="form-select" multiple>
+      {% for name in vehicles.keys() %}
+      <option value="{{ name }}">{{ name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Ort</label>
+    <input type="text" name="location" class="form-control">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label">Breite</label>
+    <input type="text" name="lat" class="form-control">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label">Länge</label>
+    <input type="text" name="lon" class="form-control">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label">Notiz</label>
+    <input type="text" name="note" class="form-control">
+  </div>
+  <div class="col-12">
+    <button class="btn btn-primary" type="submit">Starten</button>
+  </div>
+</form>
+
+<table class="table table-striped" id="incident-list">
   <thead>
-    <tr><th>ID</th><th>Zeit</th><th>Fahrzeug</th><th>Text</th><th>Ort</th><th>Status</th></tr>
+    <tr><th>ID</th><th>Start</th><th>Fahrzeuge</th><th>Ort</th><th>Aktiv</th><th>Notizen</th><th>Aktion</th></tr>
   </thead>
   <tbody>
   {% for inc in incidents %}
-    <tr>
+    <tr data-id="{{ inc.id }}">
       <td>{{ inc.id }}</td>
-      <td>{{ inc.time }}</td>
-      <td>{{ inc.unit }}</td>
-      <td>{{ inc.note }}</td>
-      <td>{{ inc.location }}</td>
-      <td>{{ inc.status }}</td>
+      <td>{{ inc.start }}</td>
+      <td>{{ inc.vehicles|join(', ') }}</td>
+      <td>{{ inc.location.name }}</td>
+      <td>{{ 'Ja' if inc.active else 'Nein' }}</td>
+      <td>
+        <ul class="list-unstyled mb-2">
+          {% for n in inc.notes %}
+          <li>{{ n.time }} - {{ n.text }}</li>
+          {% endfor %}
+        </ul>
+        {% if inc.active %}
+        <form class="note-form">
+          <div class="input-group input-group-sm">
+            <input type="text" name="text" class="form-control" placeholder="Notiz">
+            <button class="btn btn-secondary" type="submit">Hinzufügen</button>
+          </div>
+        </form>
+        {% endif %}
+      </td>
+      <td>
+        {% if inc.active %}
+        <button class="btn btn-sm btn-success end">Beenden</button>
+        {% endif %}
+      </td>
     </tr>
   {% endfor %}
   </tbody>
 </table>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const newForm = document.getElementById('new-incident');
+newForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(newForm);
+  const payload = Object.fromEntries(fd.entries());
+  if (payload.vehicles) {
+    payload.vehicles = fd.getAll('vehicles');
+  } else {
+    payload.vehicles = [];
+  }
+  const res = await fetch('/api/incidents', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const r = await res.json();
+  if (r.ok) {
+    location.reload();
+  }
+});
+
+document.querySelectorAll('#incident-list .note-form').forEach(form => {
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const tr = e.target.closest('tr');
+    const id = tr.dataset.id;
+    const text = form.querySelector('input[name="text"]').value;
+    const res = await fetch(`/api/incidents/${id}/notes`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text})
+    });
+    const r = await res.json();
+    if (r.ok) {
+      location.reload();
+    }
+  });
+});
+
+document.querySelectorAll('#incident-list .end').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    const tr = e.target.closest('tr');
+    const id = tr.dataset.id;
+    const res = await fetch(`/api/incidents/${id}/end`, {method: 'POST'});
+    const r = await res.json();
+    if (r.ok) {
+      location.reload();
+    }
+  });
+});
+</script>
 {% endblock %}
