@@ -512,18 +512,19 @@ def api_alert_incident(inc_id):
                     continue
                 if unit not in inc['vehicles']:
                     inc['vehicles'].append(unit)
-                    inc.setdefault('log', []).append({
-                        'time': datetime.utcnow().isoformat(),
-                        'unit': unit,
-                        'status': 'alarmiert',
-                    })
-                    if unit in vehicles:
-                        info = vehicles[unit]
-                        info['note'] = inc['keyword']
-                        info['location'] = inc['location']['name']
-                        info['lat'] = inc['location']['lat']
-                        info['lon'] = inc['location']['lon']
-                        info['alarm'] = datetime.utcnow().isoformat()
+                now = datetime.utcnow().isoformat()
+                inc.setdefault('log', []).append({
+                    'time': now,
+                    'unit': unit,
+                    'status': 'alarmiert',
+                })
+                if unit in vehicles:
+                    info = vehicles[unit]
+                    info['note'] = inc['keyword']
+                    info['location'] = inc['location']['name']
+                    info['lat'] = inc['location']['lat']
+                    info['lon'] = inc['location']['lon']
+                    info['alarm'] = now
             save_incidents()
             save_vehicles()
             return jsonify({'ok': True})
