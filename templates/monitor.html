@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1 class="mb-4">Alarmmonitor</h1>
+<table class="table table-striped" id="vehicle-table">
+    <thead>
+        <tr>
+            <th>Fahrzeug</th>
+            <th>Status</th>
+            <th>Hinweis</th>
+            <th>Ort</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for name, info in vehicles.items() %}
+        <tr data-unit="{{ name }}" class="status-{{ info.status }}">
+            <td>{{ name }}</td>
+            <td class="status-text">{{ status_text[info.status] }}</td>
+            <td class="note">{{ info.note }}</td>
+            <td class="location">{{ info.location }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<audio id="alarm" src="{{ url_for('static', filename='gong.wav') }}"></audio>
+{% endblock %}
+{% block scripts %}
+<script>
+const statusText = {{ status_text|tojson }};
+const lastStatus = {};
+for (const [unit, info] of Object.entries({{ vehicles|tojson }})) {
+    lastStatus[unit] = info.status;
+}
+const alarmSound = document.getElementById('alarm');
+
+function speak(text) {
+    if ('speechSynthesis' in window) {
+        const msg = new SpeechSynthesisUtterance(text);
+        speechSynthesis.speak(msg);
+    }
+}
+
+function triggerAlarm(info) {
+    alarmSound.currentTime = 0;
+    alarmSound.play();
+    const text = `${info.note || ''} ${info.location || ''}`.trim();
+    if (text) {
+        speak(text);
+    }
+}
+
+async function refresh() {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    for (const [unit, info] of Object.entries(data)) {
+        const row = document.querySelector(`tr[data-unit="${unit}"]`);
+        if (row) {
+            row.className = `status-${info.status}`;
+            row.querySelector('.status-text').textContent = statusText[info.status];
+            row.querySelector('.note').textContent = info.note;
+            row.querySelector('.location').textContent = info.location;
+            if (lastStatus[unit] !== undefined && lastStatus[unit] < 3 && info.status >= 3) {
+                triggerAlarm(info);
+            }
+            lastStatus[unit] = info.status;
+        }
+    }
+}
+setInterval(refresh, 5000);
+</script>
+{% endblock %}
