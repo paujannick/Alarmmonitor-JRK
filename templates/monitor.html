@@ -1,7 +1,12 @@
 {% extends 'base.html' %}
+{% block head_extra %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+{% endblock %}
 {% block content %}
 <h1 class="mb-4">Alarmmonitor</h1>
+<button id="fullscreen" class="btn btn-secondary mb-3">Vollbild</button>
 <div id="latest-incident" class="alert alert-danger display-4" style="display:none;"></div>
+<div id="map" style="height:400px;" class="mb-3"></div>
 <table class="table table-striped" id="vehicle-table">
     <thead>
         <tr>
@@ -25,6 +30,7 @@
 <audio id="alarm" src="{{ url_for('static', filename='gong.wav') }}"></audio>
 {% endblock %}
 {% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const statusText = {{ status_text|tojson }};
 const lastStatus = {};
@@ -33,6 +39,25 @@ for (const [unit, info] of Object.entries({{ vehicles|tojson }})) {
 }
 const alarmSound = document.getElementById('alarm');
 const latestDiv = document.getElementById('latest-incident');
+let map;
+const mapDiv = document.getElementById('map');
+const vehicleMarkers = {};
+document.getElementById('fullscreen').addEventListener('click', () => {
+  if (document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen();
+  }
+});
+if (document.documentElement.requestFullscreen) {
+  document.documentElement.requestFullscreen().catch(() => {});
+}
+document.addEventListener('fullscreenchange', () => {
+  const nav = document.querySelector('nav');
+  if (document.fullscreenElement) {
+    if (nav) nav.style.display = 'none';
+  } else {
+    if (nav) nav.style.display = '';
+  }
+});
 
 function speak(text) {
     if ('speechSynthesis' in window) {
@@ -50,6 +75,15 @@ function triggerAlarm(unit, info) {
     }
     latestDiv.innerHTML = `<strong>${unit}</strong> ${text}`;
     latestDiv.style.display = 'block';
+    if (info.lat && info.lon) {
+        if (!map) {
+            map = L.map('map').setView([info.lat, info.lon], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '© OpenStreetMap'}).addTo(map);
+        } else {
+            map.setView([info.lat, info.lon], 13);
+        }
+        L.marker([info.lat, info.lon]).addTo(map);
+    }
 }
 
 async function refresh() {
@@ -66,9 +100,23 @@ async function refresh() {
                 triggerAlarm(unit, info);
             }
             lastStatus[unit] = info.status;
+            if (info.lat && info.lon) {
+                if (!map) {
+                    map = L.map('map').setView([info.lat, info.lon], 6);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '© OpenStreetMap'}).addTo(map);
+                }
+                if (vehicleMarkers[unit]) {
+                    vehicleMarkers[unit].setLatLng([info.lat, info.lon]);
+                } else {
+                    vehicleMarkers[unit] = L.marker([info.lat, info.lon]).addTo(map).bindPopup(unit);
+                }
+            } else if (vehicleMarkers[unit]) {
+                map.removeLayer(vehicleMarkers[unit]);
+                delete vehicleMarkers[unit];
+            }
         }
     }
 }
-setInterval(refresh, 5000);
+setInterval(refresh, 1000);
 </script>
 {% endblock %}

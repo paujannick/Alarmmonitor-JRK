@@ -4,12 +4,13 @@ Komplettlösung für einen webbasierten Alarmmonitor und ein Leitstellen-Interfa
 
 ## Features
 - Anzeige und Verwaltung von Fahrzeugen mit deutschen Rettungsdienst-Statuscodes
-- Leitstellenoberfläche zum Setzen von Status, Alarmtext und Einsatzort
+- Leitstellenoberfläche zum Setzen von Status sowie zum Auslösen von Alarmen mit Stichwort, Einsatzort, Koordinaten und Auswahl mehrerer Fahrzeuge
 - Farbige Darstellung der Status für schnelle Übersicht
 - Persistente Speicherung der Fahrzeugdaten in `data/vehicles.json`
 - Alarmgong und Sprachausgabe des Alarmtextes bei neuen Einsätzen
-- Fahrzeugverwaltung zum Hinzufügen und Entfernen von Einheiten
-- Einsatzdokumentation in `data/incidents.json` mit Übersicht im Webinterface
+- Fahrzeugverwaltung zum Hinzufügen und Entfernen von Einheiten inklusive Funkrufnamen und Besatzung
+- Einsatzdokumentation in `data/incidents.json` mit Einsatztagebuch, Fahrzeugzuordnung und manueller Start/Beendigung
+- Alarmmonitor im Vollbildmodus mit Kartenansicht, Fahrzeugpositionen und versteckter Menüleiste im Vollbild
 - Installationsskript für virtuelle Umgebung und Startskript
 
 ### Alarmgong hinzufügen
@@ -19,12 +20,17 @@ Die Audiodatei ist aus dem Repository ausgeschlossen. Lege eine passende
 
 ## Installation
 ```bash
-./scripts/install.sh
+./install.sh
 ```
 
 ## Start
 ```bash
-./scripts/start.sh
+./start.sh
+```
+
+## Update
+```bash
+./update.sh
 ```
 
 Anschließend erreichbar unter:
