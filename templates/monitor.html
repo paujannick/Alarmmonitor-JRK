@@ -48,13 +48,11 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const statusText = {{ status_text|tojson }};
-const lastStatus = {};
-const lastAlertInfo = {};
+const lastAlarmTime = {};
 let lastAlarmUnit = null;
 const vehicleIcons = {};
 for (const [unit, info] of Object.entries({{ vehicles|tojson }})) {
-    lastStatus[unit] = info.status;
-    lastAlertInfo[unit] = {note: info.note, location: info.location};
+    lastAlarmTime[unit] = info.alarm || null;
     if (info.icon) {
         vehicleIcons[unit] = L.icon({iconUrl:`/static/${info.icon}`, iconSize:[32,32], iconAnchor:[16,16]});
     }
@@ -237,10 +235,10 @@ async function refresh() {
                 iconCell.innerHTML = '';
                 delete vehicleIcons[unit];
             }
-            const prev = lastAlertInfo[unit] || {};
-            const hadAlertInfo = prev.note || prev.location;
             const hasAlertInfo = info.note || info.location;
-            if ((info.status === 1 || info.status === 2) && hasAlertInfo && !hadAlertInfo) {
+            const currAlarm = info.alarm;
+            const prevAlarm = lastAlarmTime[unit];
+            if (currAlarm && currAlarm !== prevAlarm) {
                 triggerAlarm(unit, info);
             }
             if (lastAlarmUnit === unit && !hasAlertInfo) {
@@ -248,8 +246,7 @@ async function refresh() {
                 lastAlarmUnit = null;
                 lastAlarmId = null;
             }
-            lastAlertInfo[unit] = {note: info.note, location: info.location};
-            lastStatus[unit] = info.status;
+            lastAlarmTime[unit] = currAlarm;
             if (info.lat && info.lon) {
                 if (vehicleMarkers[unit]) {
                     vehicleMarkers[unit].setLatLng([info.lat, info.lon]);
