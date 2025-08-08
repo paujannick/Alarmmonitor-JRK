@@ -35,6 +35,7 @@ DEFAULT_VEHICLES = {
         'lat': None,
         'lon': None,
         'icon': None,
+        'tts': '',
     },
     'RTW2': {
         'name': 'Rettungswagen 2',
@@ -46,6 +47,7 @@ DEFAULT_VEHICLES = {
         'lat': None,
         'lon': None,
         'icon': None,
+        'tts': '',
     },
     'KTW1': {
         'name': 'Krankentransportwagen 1',
@@ -57,6 +59,7 @@ DEFAULT_VEHICLES = {
         'lat': None,
         'lon': None,
         'icon': None,
+        'tts': '',
     },
 }
 
@@ -88,6 +91,7 @@ def load_vehicles():
                 info.setdefault('lat', None)
                 info.setdefault('lon', None)
                 info.setdefault('icon', None)
+                info.setdefault('tts', '')
             return data
     data = DEFAULT_VEHICLES.copy()
     return data
@@ -103,7 +107,11 @@ def save_vehicles():
 def load_incidents():
     if INCIDENT_FILE.exists():
         with open(INCIDENT_FILE, encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+            for inc in data:
+                inc.setdefault('priority', '')
+                inc.setdefault('patient', '')
+            return data
     return []
 
 
@@ -231,6 +239,7 @@ def api_add_vehicle():
     name = data.get('name', unit)
     callsign = data.get('callsign', '')
     crew = data.get('crew', [])
+    tts = data.get('tts', '')
     if unit and unit not in vehicles:
         vehicles[unit] = {
             'name': name,
@@ -242,10 +251,33 @@ def api_add_vehicle():
             'lat': None,
             'lon': None,
             'icon': None,
+            'tts': tts,
         }
         save_vehicles()
         return jsonify({'ok': True})
     return jsonify({'ok': False}), 400
+
+
+@app.route('/api/vehicles/<unit>', methods=['PUT'])
+def api_update_vehicle(unit):
+    if unit not in vehicles:
+        return jsonify({'ok': False}), 404
+    data = request.json or {}
+    info = vehicles[unit]
+    name = data.get('name')
+    callsign = data.get('callsign')
+    crew = data.get('crew')
+    tts = data.get('tts')
+    if name is not None:
+        info['name'] = name
+    if callsign is not None:
+        info['callsign'] = callsign
+    if crew is not None:
+        info['crew'] = crew
+    if tts is not None:
+        info['tts'] = tts
+    save_vehicles()
+    return jsonify({'ok': True})
 
 
 @app.route('/api/vehicles/<unit>/icon', methods=['POST'])
@@ -289,6 +321,8 @@ def api_create_incident():
     location = data.get('location', '')
     lat = data.get('lat') or None
     lon = data.get('lon') or None
+    priority = data.get('priority', '')
+    patient = data.get('patient', '')
     if (lat is None or lon is None) and location:
         lat, lon = geocode(location)
     incident = {
@@ -305,6 +339,8 @@ def api_create_incident():
             'lon': lon,
         },
         'active': True,
+        'priority': priority,
+        'patient': patient,
     }
     if note:
         incident['notes'].append({'time': datetime.utcnow().isoformat(), 'text': note})
@@ -395,9 +431,47 @@ def api_alert_incident(inc_id):
     return jsonify({'ok': False}), 404
 
 
+@app.route('/api/incidents/<int:inc_id>', methods=['GET'])
+def api_get_incident(inc_id):
+    for inc in incidents:
+        if inc['id'] == inc_id:
+            return jsonify(inc)
+    return jsonify({'ok': False}), 404
+
+
+@app.route('/api/incidents/<int:inc_id>', methods=['PUT'])
+def api_update_incident(inc_id):
+    data = request.json or {}
+    for inc in incidents:
+        if inc['id'] == inc_id:
+            keyword = data.get('keyword')
+            loc = data.get('location') or {}
+            loc_name = loc.get('name') if isinstance(loc, dict) else loc
+            priority = data.get('priority')
+            patient = data.get('patient')
+            note = data.get('note')
+            if keyword is not None:
+                inc['keyword'] = keyword
+            if loc_name is not None:
+                inc['location']['name'] = loc_name
+                if not inc['location'].get('lat') or not inc['location'].get('lon'):
+                    lat, lon = geocode(loc_name)
+                    inc['location']['lat'] = lat
+                    inc['location']['lon'] = lon
+            if priority is not None:
+                inc['priority'] = priority
+            if patient is not None:
+                inc['patient'] = patient
+            if note:
+                inc.setdefault('notes', []).append({'time': datetime.utcnow().isoformat(), 'text': note})
+            save_incidents()
+            return jsonify({'ok': True})
+    return jsonify({'ok': False}), 404
+
+
 @app.route('/settings')
 def settings():
-    return render_template('settings.html', title='Einstellungen')
+    return render_template('settings.html', title='Einstellungen', vehicles=vehicles)
 
 
 @app.route('/download-log')

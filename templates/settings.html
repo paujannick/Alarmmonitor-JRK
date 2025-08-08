@@ -4,4 +4,38 @@
 <p>
     <a href="{{ url_for('download_log') }}" class="btn btn-secondary">Log herunterladen</a>
 </p>
+<h2 class="mt-4">Sprachausgabe der Funkrufnamen</h2>
+<table class="table" id="tts-table">
+  <thead><tr><th>Funkrufname</th><th>Sprachausgabe</th><th>Aktion</th></tr></thead>
+  <tbody>
+  {% for name, info in vehicles.items() %}
+    <tr data-unit="{{ name }}">
+      <td>{{ info.callsign }}</td>
+      <td><input type="text" class="form-control form-control-sm tts" value="{{ info.tts or info.callsign }}"></td>
+      <td><button class="btn btn-sm btn-primary save">Speichern</button></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('#tts-table .save').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    const tr = e.target.closest('tr');
+    const unit = tr.dataset.unit;
+    const tts = tr.querySelector('.tts').value;
+    const res = await fetch(`/api/vehicles/${unit}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({tts})
+    });
+    const r = await res.json();
+    if (r.ok) {
+      alert('Gespeichert');
+    }
+  });
+});
+</script>
 {% endblock %}

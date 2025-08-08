@@ -153,8 +153,9 @@ function triggerAlarm(unit, info) {
     if (alarmId === lastAlarmId) return;
     lastAlarmId = alarmId;
     lastAlarmUnit = unit;
-    const callsign = info.callsign || unit;
-    const parts = [`Alarm für ${callsign}`];
+    const displayCallsign = info.callsign || unit;
+    const speechCallsign = info.tts || displayCallsign;
+    const parts = [`Alarm für ${speechCallsign}`];
     if (info.note) parts.push(info.note);
     if (info.location) parts.push(info.location);
     const speechText = parts.join('. ');
@@ -170,14 +171,14 @@ function triggerAlarm(unit, info) {
         enableBtn.style.display = '';
         speak(speechText);
     }
-    latestDiv.innerHTML = `<strong>${callsign}</strong> ${displayText}`;
+    latestDiv.innerHTML = `<strong>${displayCallsign}</strong> ${displayText}`;
     latestDiv.style.display = 'block';
     if (info.lat && info.lon) {
         if (vehicleMarkers[unit]) {
             vehicleMarkers[unit].setLatLng([info.lat, info.lon]);
             vehicleMarkers[unit].setIcon(getIcon(unit));
         } else {
-            vehicleMarkers[unit] = L.marker([info.lat, info.lon], {icon: getIcon(unit)}).addTo(map).bindPopup(callsign);
+            vehicleMarkers[unit] = L.marker([info.lat, info.lon], {icon: getIcon(unit)}).addTo(map).bindPopup(displayCallsign);
         }
     }
     fitMapToAll();

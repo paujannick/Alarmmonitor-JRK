@@ -118,6 +118,62 @@
   {% endfor %}
   </tbody>
 </table>
+
+<!-- Incident detail modal -->
+<div class="modal fade" id="incident-modal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Einsatzdetails</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="incident-form">
+          <input type="hidden" name="id">
+          <div class="mb-3">
+            <label class="form-label">Vorlage</label>
+            <select name="template" class="form-select">
+              <option value="">--</option>
+              <option value="bma">Brandmeldeanlage</option>
+              <option value="vu">Verkehrsunfall</option>
+              <option value="rd">Medizinischer Notfall</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Stichwort</label>
+            <input type="text" name="keyword" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Ort</label>
+            <input type="text" name="location" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Priorität</label>
+            <select name="priority" class="form-select">
+              <option value="">--</option>
+              <option value="R0">R0</option>
+              <option value="R1">R1</option>
+              <option value="R2">R2</option>
+              <option value="R3">R3</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Patient</label>
+            <input type="text" name="patient" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Notiz</label>
+            <textarea name="note" class="form-control" rows="3"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+        <button type="button" class="btn btn-primary" id="incident-save">Speichern</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -147,6 +203,17 @@ form.addEventListener('submit', async (e) => {
 });
 
 const alarmForm = document.getElementById('alarm-form');
+const incidentModal = new bootstrap.Modal(document.getElementById('incident-modal'));
+function fillIncidentModal(inc) {
+    const f = document.getElementById('incident-form');
+    f.elements['id'].value = inc.id || '';
+    f.keyword.value = inc.keyword || '';
+    f.location.value = (inc.location && inc.location.name) || '';
+    f.priority.value = inc.priority || '';
+    f.patient.value = inc.patient || '';
+    f.note.value = '';
+    f.template.value = '';
+}
 alarmForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(alarmForm);
@@ -159,6 +226,59 @@ alarmForm.addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     document.getElementById('alarm-result').textContent = data.ok ? 'Alarm gesendet' : 'Fehler';
+    if (data.ok) {
+        const incRes = await fetch(`/api/incidents/${data.id}`);
+        const incData = await incRes.json();
+        fillIncidentModal(incData);
+        incidentModal.show();
+    }
+});
+
+document.querySelectorAll('#incident-list tbody tr').forEach(tr => {
+  tr.addEventListener('dblclick', async () => {
+    const id = tr.dataset.id;
+    const res = await fetch(`/api/incidents/${id}`);
+    const inc = await res.json();
+    fillIncidentModal(inc);
+    incidentModal.show();
+  });
+});
+
+document.getElementById('incident-save').addEventListener('click', async () => {
+  const f = document.getElementById('incident-form');
+  const id = f.elements['id'].value;
+  const payload = {
+    keyword: f.keyword.value,
+    location: {name: f.location.value},
+    priority: f.priority.value,
+    patient: f.patient.value
+  };
+  const note = f.note.value.trim();
+  if (note) payload.note = note;
+  const res = await fetch(`/api/incidents/${id}`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const r = await res.json();
+  if (r.ok) {
+    incidentModal.hide();
+    window.location.reload();
+  }
+});
+
+const templateMap = {
+  bma: {keyword: 'Brandmeldeanlage', priority: 'R1'},
+  vu: {keyword: 'Verkehrsunfall', priority: 'R1'},
+  rd: {keyword: 'Medizinischer Notfall', priority: 'R2'}
+};
+document.querySelector('#incident-form [name="template"]').addEventListener('change', (e) => {
+  const f = document.getElementById('incident-form');
+  const t = templateMap[e.target.value];
+  if (t) {
+    f.keyword.value = t.keyword;
+    f.priority.value = t.priority;
+  }
 });
 
 document.querySelectorAll('#incident-list .note-form').forEach(form => {
