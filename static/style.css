@@ -1,13 +1,5 @@
 body { font-family: Arial, sans-serif; }
 .table tr[class^="status-"] { color: #000; }
-.status-0 { background-color: #f8d7da; }
-.status-1 { background-color: #d1ecf1; }
-.status-2 { background-color: #d4edda; }
-.status-3 { background-color: #fff3cd; }
-.status-4 { background-color: #ffeeba; }
-.status-5 { background-color: #cfe2ff; }
-.status-6 { background-color: #e2e3e5; }
-.status-7 { background-color: #f0d9ff; }
-.status-8 { background-color: #d6d8db; }
-.status-9 { background-color: #f5c6cb; }
+.status-0, .status-1, .status-2 { background-color: #d4edda; }
+.status-3, .status-4, .status-5, .status-6, .status-7, .status-8, .status-9 { background-color: #f8d7da; }
 #latest-incident { display:none; }
