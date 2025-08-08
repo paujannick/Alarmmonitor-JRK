@@ -199,7 +199,7 @@ document.getElementById('incident-save').addEventListener('click', async () => {
   const id = f.elements['id'].value;
   const payload = {
     keyword: f.keyword.value,
-    location: {name: f.location.value},
+    location: f.location.value,
     priority: f.priority.value,
     patient: f.patient.value,
     vehicles: Array.from(f.querySelectorAll('input[name="vehicles"]:checked')).map(cb => cb.value)

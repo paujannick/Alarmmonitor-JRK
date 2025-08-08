@@ -65,6 +65,8 @@ const datetimeEl = document.getElementById('datetime');
 let audioUnlocked = false;
 const ttsEl = new Audio();
 let lastAlarmId = null;
+const alarmQueue = [];
+let alarmProcessing = false;
 const map = L.map('map').setView([50.586, 8.675], 12);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '© OpenStreetMap'}).addTo(map);
 const vehicleMarkers = {};
@@ -132,20 +134,25 @@ setInterval(updateDateTime, 1000);
 updateDateTime();
 function speak(text) {
     const t = (text || '').trim();
-    if (!t) return;
+    if (!t) return Promise.resolve();
     if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(t);
-        utterance.lang = 'de-DE';
-        window.speechSynthesis.speak(utterance);
-        return;
+        return new Promise(resolve => {
+            const utterance = new SpeechSynthesisUtterance(t);
+            utterance.lang = 'de-DE';
+            utterance.onend = resolve;
+            window.speechSynthesis.speak(utterance);
+        });
     }
     if (!audioUnlocked) {
         enableBtn.style.display = '';
-        return;
+        return Promise.resolve();
     }
-    const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=de&q=${encodeURIComponent(t)}`;
-    ttsEl.src = url;
-    ttsEl.play().catch(err => console.error(err));
+    return new Promise(resolve => {
+        const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=de&q=${encodeURIComponent(t)}`;
+        ttsEl.src = url;
+        ttsEl.onended = resolve;
+        ttsEl.play().catch(() => resolve());
+    });
 }
 
 function triggerAlarm(unit, info) {
@@ -160,19 +167,21 @@ function triggerAlarm(unit, info) {
     if (info.location) parts.push(info.location);
     const speechText = parts.join('. ');
     const displayText = `${info.note || ''} ${info.location || ''}`.trim();
-    if (audioUnlocked) {
-        alarmSound.currentTime = 0;
-        alarmSound.play().catch(() => {});
-        alarmSound.onended = () => {
-            setTimeout(() => speak(speechText), 500);
-            alarmSound.onended = null;
-        };
-    } else {
-        enableBtn.style.display = '';
-        speak(speechText);
+    alarmQueue.push({displayCallsign, speechText, displayText});
+    if (!alarmProcessing) {
+        alarmProcessing = true;
+        if (audioUnlocked) {
+            alarmSound.currentTime = 0;
+            alarmSound.play().catch(() => {});
+            alarmSound.onended = () => {
+                alarmSound.onended = null;
+                processAlarmQueue();
+            };
+        } else {
+            enableBtn.style.display = '';
+            processAlarmQueue();
+        }
     }
-    latestDiv.innerHTML = `<strong>${displayCallsign}</strong> ${displayText}`;
-    latestDiv.style.display = 'block';
     if (info.lat && info.lon) {
         if (vehicleMarkers[unit]) {
             vehicleMarkers[unit].setLatLng([info.lat, info.lon]);
@@ -182,6 +191,20 @@ function triggerAlarm(unit, info) {
         }
     }
     fitMapToAll();
+}
+
+function processAlarmQueue() {
+    const item = alarmQueue.shift();
+    if (!item) {
+        alarmProcessing = false;
+        latestDiv.style.display = 'none';
+        lastAlarmUnit = null;
+        lastAlarmId = null;
+        return;
+    }
+    latestDiv.innerHTML = `<strong>${item.displayCallsign}</strong> ${item.displayText}`;
+    latestDiv.style.display = 'block';
+    speak(item.speechText).then(() => processAlarmQueue());
 }
 
 async function refresh() {
