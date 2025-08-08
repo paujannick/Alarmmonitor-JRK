@@ -58,7 +58,6 @@ document.addEventListener('fullscreenchange', () => {
     if (nav) nav.style.display = '';
   }
 });
-
 function speak(text) {
     if ('speechSynthesis' in window) {
         const msg = new SpeechSynthesisUtterance(text);
