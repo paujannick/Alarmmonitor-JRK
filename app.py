@@ -10,16 +10,17 @@ import functools
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
 
-LOG_FILE = Path('error.log')
+LOG_FILE = Path('app.log')
 LOG_FILE.touch(exist_ok=True)
 file_handler = logging.FileHandler(LOG_FILE)
-file_handler.setLevel(logging.ERROR)
+file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(
     logging.Formatter(
         '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
     )
 )
 app.logger.addHandler(file_handler)
+app.logger.setLevel(logging.INFO)
 
 DATA_FILE = Path('data/vehicles.json')
 INCIDENT_FILE = Path('data/incidents.json')
@@ -396,11 +397,14 @@ def download_log():
     return send_file(LOG_FILE, as_attachment=True)
 
 
-def log_errors(func):
+def log_request_and_errors(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
+        app.logger.info('%s %s', request.method, request.path)
         try:
-            return func(*args, **kwargs)
+            response = func(*args, **kwargs)
+            app.logger.info('Completed %s', func.__name__)
+            return response
         except Exception:
             app.logger.exception('Error in %s', func.__name__)
             raise
@@ -410,7 +414,8 @@ def log_errors(func):
 
 for name, func in list(app.view_functions.items()):
     if name != 'static':
-        app.view_functions[name] = log_errors(func)
+        app.view_functions[name] = log_request_and_errors(func)
+
 
 
 if __name__ == '__main__':
