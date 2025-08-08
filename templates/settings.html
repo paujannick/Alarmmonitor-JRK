@@ -20,6 +20,62 @@
   {% endfor %}
   </tbody>
 </table>
+
+<h2 class="mt-4">Standorte der Wachen</h2>
+<table class="table" id="base-table">
+  <thead><tr><th>Fahrzeug</th><th>Wache</th><th>Aktion</th></tr></thead>
+  <tbody>
+  {% for name, info in vehicles.items() %}
+    <tr data-unit="{{ name }}">
+      <td>{{ name }}</td>
+      <td><input type="text" class="form-control form-control-sm base" value="{{ info.base }}"></td>
+      <td><button class="btn btn-sm btn-primary save-base">Speichern</button></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2 class="mt-4">Einsatzvorlagen</h2>
+<form id="template-add" class="row g-3 mb-3">
+  <div class="col-md-3">
+    <input type="text" name="id" class="form-control" placeholder="ID" required>
+  </div>
+  <div class="col-md-3">
+    <input type="text" name="label" class="form-control" placeholder="Bezeichnung" required>
+  </div>
+  <div class="col-md-3">
+    <input type="text" name="keyword" class="form-control" placeholder="Stichwort" required>
+  </div>
+  <div class="col-md-3">
+    <select name="priority" class="form-select">
+      <option value="">--</option>
+      <option value="R0">R0</option>
+      <option value="R1">R1</option>
+      <option value="R2">R2</option>
+      <option value="R3">R3</option>
+    </select>
+  </div>
+  <div class="col-12">
+    <button class="btn btn-primary">Hinzufügen</button>
+  </div>
+</form>
+<table class="table" id="template-table">
+  <thead><tr><th>ID</th><th>Bezeichnung</th><th>Stichwort</th><th>Priorität</th><th>Aktion</th></tr></thead>
+  <tbody>
+  {% for t in templates %}
+    <tr data-id="{{ t.id }}">
+      <td>{{ t.id }}</td>
+      <td><input type="text" class="form-control form-control-sm label" value="{{ t.label }}"></td>
+      <td><input type="text" class="form-control form-control-sm keyword" value="{{ t.keyword }}"></td>
+      <td><input type="text" class="form-control form-control-sm priority" value="{{ t.priority }}"></td>
+      <td>
+        <button class="btn btn-sm btn-primary save-template">Speichern</button>
+        <button class="btn btn-sm btn-danger delete-template">Löschen</button>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
 {% endblock %}
 
 {% block scripts %}
@@ -37,6 +93,72 @@ document.querySelectorAll('#tts-table .save').forEach(btn => {
     const r = await res.json();
     if (r.ok) {
       alert('Gespeichert');
+    }
+  });
+});
+
+document.querySelectorAll('#base-table .save-base').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    const tr = e.target.closest('tr');
+    const unit = tr.dataset.unit;
+    const base = tr.querySelector('.base').value;
+    const res = await fetch(`/api/vehicles/${unit}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({base})
+    });
+    const r = await res.json();
+    if (r.ok) {
+      alert('Gespeichert');
+    }
+  });
+});
+
+const tplForm = document.getElementById('template-add');
+tplForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(tplForm).entries());
+  const res = await fetch('/api/templates', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data)
+  });
+  const r = await res.json();
+  if (r.ok) {
+    location.reload();
+  }
+});
+
+document.querySelectorAll('#template-table .save-template').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    const tr = e.target.closest('tr');
+    const id = tr.dataset.id;
+    const payload = {
+      id,
+      label: tr.querySelector('.label').value,
+      keyword: tr.querySelector('.keyword').value,
+      priority: tr.querySelector('.priority').value
+    };
+    const res = await fetch('/api/templates', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const r = await res.json();
+    if (r.ok) {
+      alert('Gespeichert');
+    }
+  });
+});
+
+document.querySelectorAll('#template-table .delete-template').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    const tr = e.target.closest('tr');
+    const id = tr.dataset.id;
+    const res = await fetch(`/api/templates/${id}`, {method: 'DELETE'});
+    const r = await res.json();
+    if (r.ok) {
+      tr.remove();
     }
   });
 });

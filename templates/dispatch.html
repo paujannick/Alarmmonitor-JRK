@@ -19,6 +19,10 @@
             {% endfor %}
         </select>
     </div>
+    <div class="col-md-4">
+        <label class="form-label" for="dispatch-location">Ort</label>
+        <input type="text" name="location" id="dispatch-location" class="form-control">
+    </div>
     <div class="col-12">
         <button type="submit" class="btn btn-primary">Senden</button>
     </div>
@@ -85,9 +89,9 @@
             <label class="form-label" for="incident-template">Vorlage</label>
             <select name="template" id="incident-template" class="form-select">
               <option value="">--</option>
-              <option value="bma">Brandmeldeanlage</option>
-              <option value="vu">Verkehrsunfall</option>
-              <option value="rd">Medizinischer Notfall</option>
+              {% for t in templates %}
+              <option value="{{ t.id }}">{{ t.label }}</option>
+              {% endfor %}
             </select>
           </div>
           <div class="mb-3">
@@ -139,12 +143,15 @@
 <script>
 const form = document.getElementById('dispatch-form');
 const vehiclesData = {{ vehicles|tojson }};
+const availableData = {{ available|tojson }};
 const unitSelect = form.querySelector('select[name="unit"]');
 const statusSelect = form.querySelector('select[name="status"]');
+const locationInput = form.querySelector('input[name="location"]');
 function updateStatusSelect() {
     const unit = unitSelect.value;
     if (vehiclesData[unit]) {
         statusSelect.value = vehiclesData[unit].status;
+        locationInput.value = vehiclesData[unit].location || '';
     }
 }
 unitSelect.addEventListener('change', updateStatusSelect);
@@ -153,13 +160,18 @@ form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(form);
     const payload = Object.fromEntries(formData.entries());
-    const res = await fetch('/api/dispatch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    document.getElementById('result').textContent = data.ok ? 'Gesendet' : 'Fehler';
+    if (!payload.location) delete payload.location;
+    try {
+        const res = await fetch('/api/dispatch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        document.getElementById('result').textContent = data.ok ? 'Gesendet' : 'Fehler';
+    } catch (err) {
+        document.getElementById('result').textContent = 'Fehler';
+    }
 });
 
 const incidentModal = new bootstrap.Modal(document.getElementById('incident-modal'));
@@ -176,6 +188,7 @@ function fillIncidentModal(inc) {
   f.template.value = '';
   f.querySelectorAll('input[name="vehicles"]').forEach(cb => {
     cb.checked = inc.vehicles && inc.vehicles.includes(cb.value);
+    cb.disabled = !availableData[cb.value] && !cb.checked;
   });
   document.querySelector('#incident-modal .modal-title').textContent = inc.id ? 'Einsatz bearbeiten' : 'Einsatz anlegen';
 }
@@ -220,17 +233,15 @@ document.getElementById('incident-save').addEventListener('click', async () => {
   }
 });
 
-const templateMap = {
-  bma: {keyword: 'Brandmeldeanlage', priority: 'R1'},
-  vu: {keyword: 'Verkehrsunfall', priority: 'R1'},
-  rd: {keyword: 'Medizinischer Notfall', priority: 'R2'}
-};
+const templateList = {{ templates|tojson }};
+const templateMap = {};
+templateList.forEach(t => { templateMap[t.id] = t; });
 document.querySelector('#incident-form [name="template"]').addEventListener('change', (e) => {
   const f = document.getElementById('incident-form');
   const t = templateMap[e.target.value];
   if (t) {
-    f.keyword.value = t.keyword;
-    f.priority.value = t.priority;
+    f.keyword.value = t.keyword || '';
+    f.priority.value = t.priority || '';
   }
 });
 document.querySelectorAll('#incident-list .end').forEach(btn => {
