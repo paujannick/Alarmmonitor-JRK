@@ -552,12 +552,16 @@ def api_alert_incident(inc_id):
 
     Each unit is assigned to the incident and its vehicle entry is updated
     with the incident details. Vehicles are automatically set to status 3,
-    indicating they are en route to the scene.
+    indicating they are en route to the scene.  The response additionally
+    reports which units were alerted and which were skipped because they were
+    already bound to another active incident.
     """
     data = request.json or {}
     units = data.get('units', [])
     for inc in incidents:
         if inc['id'] == inc_id and inc.get('active'):
+            alerted = []
+            skipped = []
             for unit in units:
                 # Skip vehicles that are already bound to another active incident
                 if any(
@@ -565,6 +569,7 @@ def api_alert_incident(inc_id):
                     for other in incidents
                     if other is not inc
                 ):
+                    skipped.append(unit)
                     continue
                 # Add the vehicle to this incident if not already present
                 if unit not in inc['vehicles']:
@@ -586,9 +591,10 @@ def api_alert_incident(inc_id):
                     info['lon'] = inc['location']['lon']
                     info['alarm_time'] = now
                     info['incident_id'] = inc_id
+                alerted.append(unit)
             save_incidents()
             save_vehicles()
-            return jsonify({'ok': True})
+            return jsonify({'ok': True, 'alerted': alerted, 'skipped': skipped})
     return jsonify({'ok': False}), 404
 
 
