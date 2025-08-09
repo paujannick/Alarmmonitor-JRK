@@ -263,11 +263,41 @@ def api_dispatch():
         if (lat is None or lon is None) and location:
             lat, lon = geocode(location)
         info = vehicles[unit]
-        info['status'] = status
-        active = any(
-            inc.get('active') and unit in inc.get('vehicles', [])
-            for inc in incidents
+        active_inc = next(
+            (
+                inc
+                for inc in incidents
+                if inc.get('active') and unit in inc.get('vehicles', [])
+            ),
+            None,
         )
+        active = active_inc is not None
+        if active and status in {1, 2}:
+            info['status'] = status
+            info['incident_id'] = None
+            info['alarm'] = None
+            info['note'] = ''
+            if status == 2:
+                info['location'] = info.get('base', '')
+                if info['location']:
+                    info['lat'], info['lon'] = geocode(info['location'])
+                else:
+                    info['lat'] = info['lon'] = None
+            else:
+                info['location'] = ''
+                info['lat'] = None
+                info['lon'] = None
+            if active_inc and unit in active_inc.get('vehicles', []):
+                active_inc['vehicles'].remove(unit)
+                active_inc.setdefault('log', []).append({
+                    'time': datetime.utcnow().isoformat(),
+                    'unit': unit,
+                    'status': status,
+                })
+            save_vehicles()
+            save_incidents()
+            return jsonify({'ok': True})
+        info['status'] = status
         if note is not None or location is not None or lat is not None or lon is not None:
             if not active:
                 info['incident_id'] = None
