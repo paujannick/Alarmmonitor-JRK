@@ -25,7 +25,7 @@ def test_realert_same_incident_updates_log_and_vehicle():
 
     # first alert assigns vehicle
     client.post(f'/api/incidents/{inc_id}/alert', json={'units': ['RTW1']})
-    first_alarm = app.vehicles['RTW1']['alarm']
+    first_alarm = app.vehicles['RTW1']['alarm_time']
     inc = next(i for i in app.incidents if i['id'] == inc_id)
     assert [e for e in inc['log'] if e['unit'] == 'RTW1' and e['status'] == 'alarmiert']
 
@@ -35,7 +35,7 @@ def test_realert_same_incident_updates_log_and_vehicle():
     inc = next(i for i in app.incidents if i['id'] == inc_id)
     log_entries = [e for e in inc['log'] if e['unit'] == 'RTW1' and e['status'] == 'alarmiert']
     assert len(log_entries) == 2
-    assert app.vehicles['RTW1']['alarm'] != first_alarm
+    assert app.vehicles['RTW1']['alarm_time'] != first_alarm
 
 
 def test_alert_skips_vehicle_in_other_active_incident():

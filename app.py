@@ -38,7 +38,7 @@ DEFAULT_VEHICLES = {
         'icon': None,
         'tts': '',
         'base': '',
-        'alarm': None,
+        'alarm_time': None,
         'incident_id': None,
     },
     'RTW2': {
@@ -53,7 +53,7 @@ DEFAULT_VEHICLES = {
         'icon': None,
         'tts': '',
         'base': '',
-        'alarm': None,
+        'alarm_time': None,
         'incident_id': None,
     },
     'KTW1': {
@@ -68,7 +68,7 @@ DEFAULT_VEHICLES = {
         'icon': None,
         'tts': '',
         'base': '',
-        'alarm': None,
+        'alarm_time': None,
         'incident_id': None,
     },
 }
@@ -103,7 +103,8 @@ def load_vehicles():
                 info.setdefault('icon', None)
                 info.setdefault('tts', '')
                 info.setdefault('base', '')
-                info.setdefault('alarm', None)
+                if 'alarm_time' not in info:
+                    info['alarm_time'] = info.pop('alarm', None)
                 info.setdefault('incident_id', None)
             return data
     data = DEFAULT_VEHICLES.copy()
@@ -276,7 +277,7 @@ def api_dispatch():
         if active and status in {1, 2}:
             info['status'] = status
             info['incident_id'] = None
-            info['alarm'] = None
+            info['alarm_time'] = None
             info['note'] = ''
             if status == 2:
                 info['location'] = info.get('base', '')
@@ -356,7 +357,7 @@ def api_add_vehicle():
             'icon': None,
             'tts': tts,
             'base': '',
-            'alarm': None,
+            'alarm_time': None,
             'incident_id': None,
         }
         save_vehicles()
@@ -528,7 +529,7 @@ def api_end_incident(inc_id):
                         info['lat'] = None
                         info['lon'] = None
                         info['incident_id'] = None
-                        info['alarm'] = None
+                        info['alarm_time'] = None
             save_vehicles()
             save_incidents()
             return jsonify({'ok': True})
@@ -550,8 +551,8 @@ def api_alert_incident(inc_id):
     """Alert the given units for an active incident.
 
     Each unit is assigned to the incident and its vehicle entry is updated
-    with the incident details. The vehicle status itself is not changed
-    here; dispatchers may adjust it manually after alerting.
+    with the incident details. Vehicles are automatically set to status 3,
+    indicating they are en route to the scene.
     """
     data = request.json or {}
     units = data.get('units', [])
@@ -577,12 +578,13 @@ def api_alert_incident(inc_id):
                 })
                 if unit in vehicles:
                     info = vehicles[unit]
-                    # Store incident details and mark alert time without changing status
+                    # Mark vehicle as en route and store incident details
+                    info['status'] = 3
                     info['note'] = inc['keyword']
                     info['location'] = inc['location']['name']
                     info['lat'] = inc['location']['lat']
                     info['lon'] = inc['location']['lon']
-                    info['alarm'] = now
+                    info['alarm_time'] = now
                     info['incident_id'] = inc_id
             save_incidents()
             save_vehicles()
@@ -653,7 +655,7 @@ def api_update_incident(inc_id):
                             info['lat'] = None
                             info['lon'] = None
                             info['incident_id'] = None
-                            info['alarm'] = None
+                            info['alarm_time'] = None
                 save_vehicles()
             if note:
                 inc.setdefault('notes', []).append({'time': datetime.utcnow().isoformat(), 'text': note})
