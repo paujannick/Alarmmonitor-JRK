@@ -119,9 +119,10 @@
           <h6>Fahrzeugzuordnung</h6>
           <div class="mb-3">
           {% for name, info in vehicles.items() %}
-            <div class="form-check form-check-inline">
+            <div class="form-check form-check-inline align-items-center">
               <input class="form-check-input" type="checkbox" name="vehicles" value="{{ name }}" id="iv{{ loop.index }}">
-              <label class="form-check-label" for="iv{{ loop.index }}">{{ name }}</label>
+              <label class="form-check-label me-2" for="iv{{ loop.index }}">{{ name }}</label>
+              <input class="form-check-input alarm-check" type="checkbox" id="ialarm{{ loop.index }}" data-unit="{{ name }}" disabled {% if info.alarm %}checked{% endif %} title="Alarmiert">
             </div>
           {% endfor %}
           </div>
@@ -191,6 +192,10 @@ function fillIncidentModal(inc) {
     cb.checked = inc.vehicles && inc.vehicles.includes(cb.value);
     cb.disabled = !availableData[cb.value] && !cb.checked;
   });
+  f.querySelectorAll('.alarm-check').forEach(cb => {
+    const unit = cb.dataset.unit;
+    cb.checked = vehiclesData[unit] && vehiclesData[unit].alarm;
+  });
   document.querySelector('#incident-modal .modal-title').textContent = inc.id ? 'Einsatz bearbeiten' : 'Einsatz anlegen';
 }
 document.getElementById('incident-new').addEventListener('click', () => {
@@ -217,6 +222,8 @@ document.getElementById('incident-save').addEventListener('click', async () => {
     priority: f.priority.value,
     patient: f.patient.value
   };
+  const units = Array.from(f.querySelectorAll('input[name="vehicles"]:checked')).map(cb => cb.value);
+  if (units.length) payload.vehicles = units;
   const note = f.note.value.trim();
   if (note) payload.note = note;
   const url = id ? `/api/incidents/${id}` : '/api/incidents';
@@ -238,13 +245,15 @@ document.getElementById('incident-save').addEventListener('click', async () => {
 document.getElementById('incident-alert').addEventListener('click', async () => {
   const f = document.getElementById('incident-form');
   let id = f.elements['id'].value; // Existing incident id (empty when creating)
+  const units = Array.from(f.querySelectorAll('input[name="vehicles"]:checked')).map(cb => cb.value);
 
   // Gather incident details from the form
   const details = {
     keyword: f.keyword.value,
     location: f.location.value,
     priority: f.priority.value,
-    patient: f.patient.value
+    patient: f.patient.value,
+    vehicles: units
   };
   const note = f.note.value.trim();
   if (note) details.note = note;
@@ -268,7 +277,6 @@ document.getElementById('incident-alert').addEventListener('click', async () => 
   }
 
   // Collect selected vehicles and alert them
-  const units = Array.from(f.querySelectorAll('input[name="vehicles"]:checked')).map(cb => cb.value);
   if (units.length) {
     await fetch(`/api/incidents/${id}/alert`, {
       method: 'POST',
