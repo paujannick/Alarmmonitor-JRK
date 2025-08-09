@@ -53,7 +53,7 @@ const lastIncidentId = {};
 let lastAlarmUnit = null;
 const vehicleIcons = {};
 for (const [unit, info] of Object.entries({{ vehicles|tojson }})) {
-    lastAlarmTime[unit] = info.alarm || null;
+    lastAlarmTime[unit] = info.alarm_time || null;
     lastIncidentId[unit] = info.incident_id || null;
     if (info.icon) {
         vehicleIcons[unit] = L.icon({iconUrl:`/static/${info.icon}`, iconSize:[32,32], iconAnchor:[16,16]});
@@ -162,7 +162,8 @@ function speak(text) {
 }
 
 function triggerAlarm(unit, info) {
-    const alarmId = `${unit}:${info.incident_id || info.alarm || ''}`;
+    const uniqueId = info.alarm_time || info.incident_id || Date.now();
+    const alarmId = `${unit}:${uniqueId}`;
     if (alarmId === lastAlarmId) return;
     lastAlarmId = alarmId;
     lastAlarmUnit = unit;
@@ -238,7 +239,7 @@ async function refresh() {
                 delete vehicleIcons[unit];
             }
             const hasAlertInfo = info.note || info.location;
-            const currAlarm = info.alarm;
+            const currAlarm = info.alarm_time;
             const prevAlarm = lastAlarmTime[unit];
             const currInc = info.incident_id;
             const prevInc = lastIncidentId[unit];

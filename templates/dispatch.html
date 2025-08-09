@@ -122,7 +122,7 @@
             <div class="form-check form-check-inline align-items-center">
               <input class="form-check-input" type="checkbox" name="vehicles" value="{{ name }}" id="iv{{ loop.index }}">
               <label class="form-check-label me-2" for="iv{{ loop.index }}">{{ name }}</label>
-              <input class="form-check-input alarm-check" type="checkbox" id="ialarm{{ loop.index }}" data-unit="{{ name }}" disabled {% if info.alarm %}checked{% endif %} title="Alarmiert">
+              <input class="form-check-input alarm-check" type="checkbox" id="ialarm{{ loop.index }}" data-unit="{{ name }}" disabled {% if info.alarm_time %}checked{% endif %} title="Alarmiert">
             </div>
           {% endfor %}
           </div>
@@ -194,7 +194,7 @@ function fillIncidentModal(inc) {
   });
   f.querySelectorAll('.alarm-check').forEach(cb => {
     const unit = cb.dataset.unit;
-    cb.checked = vehiclesData[unit] && vehiclesData[unit].alarm;
+    cb.checked = vehiclesData[unit] && vehiclesData[unit].alarm_time;
   });
   document.querySelector('#incident-modal .modal-title').textContent = inc.id ? 'Einsatz bearbeiten' : 'Einsatz anlegen';
 }
