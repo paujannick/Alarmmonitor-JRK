@@ -39,6 +39,7 @@ DEFAULT_VEHICLES = {
         'tts': '',
         'base': '',
         'alarm': None,
+        'incident_id': None,
     },
     'RTW2': {
         'name': 'Rettungswagen 2',
@@ -53,6 +54,7 @@ DEFAULT_VEHICLES = {
         'tts': '',
         'base': '',
         'alarm': None,
+        'incident_id': None,
     },
     'KTW1': {
         'name': 'Krankentransportwagen 1',
@@ -67,6 +69,7 @@ DEFAULT_VEHICLES = {
         'tts': '',
         'base': '',
         'alarm': None,
+        'incident_id': None,
     },
 }
 
@@ -101,6 +104,7 @@ def load_vehicles():
                 info.setdefault('tts', '')
                 info.setdefault('base', '')
                 info.setdefault('alarm', None)
+                info.setdefault('incident_id', None)
             return data
     data = DEFAULT_VEHICLES.copy()
     return data
@@ -265,6 +269,8 @@ def api_dispatch():
             for inc in incidents
         )
         if note is not None or location is not None or lat is not None or lon is not None:
+            if not active:
+                info['incident_id'] = None
             if note is not None:
                 info['note'] = note
             if location is not None:
@@ -272,6 +278,7 @@ def api_dispatch():
                 info['lat'] = lat
                 info['lon'] = lon
         elif status == 2 and not active:
+            info['incident_id'] = None
             info['note'] = ''
             info['location'] = info.get('base', '')
             if info['location']:
@@ -279,6 +286,7 @@ def api_dispatch():
             else:
                 info['lat'] = info['lon'] = None
         elif not active:
+            info['incident_id'] = None
             info['note'] = ''
             info['location'] = ''
             info['lat'] = None
@@ -317,6 +325,8 @@ def api_add_vehicle():
             'icon': None,
             'tts': tts,
             'base': '',
+            'alarm': None,
+            'incident_id': None,
         }
         save_vehicles()
         return jsonify({'ok': True})
@@ -482,6 +492,7 @@ def api_end_incident(inc_id):
                         info['location'] = ''
                         info['lat'] = None
                         info['lon'] = None
+                        info['incident_id'] = None
             save_vehicles()
             save_incidents()
             return jsonify({'ok': True})
@@ -525,6 +536,7 @@ def api_alert_incident(inc_id):
                     info['lat'] = inc['location']['lat']
                     info['lon'] = inc['location']['lon']
                     info['alarm'] = now
+                    info['incident_id'] = inc_id
             save_incidents()
             save_vehicles()
             return jsonify({'ok': True})
@@ -578,6 +590,7 @@ def api_update_incident(inc_id):
                         info['location'] = inc['location']['name']
                         info['lat'] = inc['location'].get('lat')
                         info['lon'] = inc['location'].get('lon')
+                        info['incident_id'] = inc_id
                 for unit in removed:
                     if unit in vehicles:
                         if not any(
@@ -590,6 +603,7 @@ def api_update_incident(inc_id):
                             info['location'] = ''
                             info['lat'] = None
                             info['lon'] = None
+                            info['incident_id'] = None
                 save_vehicles()
             if note:
                 inc.setdefault('notes', []).append({'time': datetime.utcnow().isoformat(), 'text': note})

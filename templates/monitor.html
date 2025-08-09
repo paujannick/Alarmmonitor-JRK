@@ -49,10 +49,12 @@
 <script>
 const statusText = {{ status_text|tojson }};
 const lastAlarmTime = {};
+const lastIncidentId = {};
 let lastAlarmUnit = null;
 const vehicleIcons = {};
 for (const [unit, info] of Object.entries({{ vehicles|tojson }})) {
     lastAlarmTime[unit] = info.alarm || null;
+    lastIncidentId[unit] = info.incident_id || null;
     if (info.icon) {
         vehicleIcons[unit] = L.icon({iconUrl:`/static/${info.icon}`, iconSize:[32,32], iconAnchor:[16,16]});
     }
@@ -160,7 +162,7 @@ function speak(text) {
 }
 
 function triggerAlarm(unit, info) {
-    const alarmId = unit + (info.note || '') + (info.location || '');
+    const alarmId = `${unit}:${info.incident_id || info.alarm || ''}`;
     if (alarmId === lastAlarmId) return;
     lastAlarmId = alarmId;
     lastAlarmUnit = unit;
@@ -238,7 +240,9 @@ async function refresh() {
             const hasAlertInfo = info.note || info.location;
             const currAlarm = info.alarm;
             const prevAlarm = lastAlarmTime[unit];
-            if (currAlarm && currAlarm !== prevAlarm) {
+            const currInc = info.incident_id;
+            const prevInc = lastIncidentId[unit];
+            if ((currAlarm && currAlarm !== prevAlarm) || (currInc && currInc !== prevInc)) {
                 triggerAlarm(unit, info);
             }
             if (lastAlarmUnit === unit && !hasAlertInfo) {
@@ -247,6 +251,7 @@ async function refresh() {
                 lastAlarmId = null;
             }
             lastAlarmTime[unit] = currAlarm;
+            lastIncidentId[unit] = currInc || null;
             if (info.lat && info.lon) {
                 if (vehicleMarkers[unit]) {
                     vehicleMarkers[unit].setLatLng([info.lat, info.lon]);
