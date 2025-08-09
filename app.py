@@ -562,6 +562,7 @@ def api_alert_incident(inc_id):
                 if any(
                     other.get('active') and unit in other.get('vehicles', [])
                     for other in incidents
+                    if other is not inc
                 ):
                     continue
                 # Add the vehicle to this incident if not already present
