@@ -48,13 +48,12 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const statusText = {{ status_text|tojson }};
-const lastAlarmTime = {};
-const lastIncidentId = {};
+const lastAlarmIds = {};
 let lastAlarmUnit = null;
 const vehicleIcons = {};
 for (const [unit, info] of Object.entries({{ vehicles|tojson }})) {
-    lastAlarmTime[unit] = info.alarm_time || null;
-    lastIncidentId[unit] = info.incident_id || null;
+    const initId = info.alarm_time || info.incident_id;
+    lastAlarmIds[unit] = initId ? `${unit}:${initId}` : null;
     if (info.icon) {
         vehicleIcons[unit] = L.icon({iconUrl:`/static/${info.icon}`, iconSize:[32,32], iconAnchor:[16,16]});
     }
@@ -74,6 +73,10 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: 
 const vehicleMarkers = {};
 const incidentMarkers = {};
 const iconBase = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/';
+function computeAlarmId(unit, info) {
+    const uniqueId = info.alarm_time || info.incident_id || Date.now();
+    return `${unit}:${uniqueId}`;
+}
 function unlockAudio() {
     alarmSound.play().then(() => {
         alarmSound.pause();
@@ -161,9 +164,8 @@ function speak(text) {
     });
 }
 
-function triggerAlarm(unit, info) {
-    const uniqueId = info.alarm_time || info.incident_id || Date.now();
-    const alarmId = `${unit}:${uniqueId}`;
+function triggerAlarm(unit, info, alarmId) {
+    alarmId = alarmId || computeAlarmId(unit, info);
     if (alarmId === lastAlarmId) return;
     lastAlarmId = alarmId;
     lastAlarmUnit = unit;
@@ -174,7 +176,7 @@ function triggerAlarm(unit, info) {
     if (info.location) parts.push(info.location);
     const speechText = parts.join('. ');
     const displayText = `${info.note || ''} ${info.location || ''}`.trim();
-    alarmQueue.push({displayCallsign, speechText, displayText});
+    alarmQueue.push({alarmId, displayCallsign, speechText, displayText});
     if (!alarmProcessing) {
         alarmProcessing = true;
         if (audioUnlocked) {
@@ -239,20 +241,16 @@ async function refresh() {
                 delete vehicleIcons[unit];
             }
             const hasAlertInfo = info.note || info.location;
-            const currAlarm = info.alarm_time;
-            const prevAlarm = lastAlarmTime[unit];
-            const currInc = info.incident_id;
-            const prevInc = lastIncidentId[unit];
-            if ((currAlarm && currAlarm !== prevAlarm) || (currInc && currInc !== prevInc)) {
-                triggerAlarm(unit, info);
+            const alarmId = (info.alarm_time || info.incident_id) ? computeAlarmId(unit, info) : null;
+            if (alarmId && alarmId !== lastAlarmIds[unit]) {
+                triggerAlarm(unit, info, alarmId);
             }
             if (lastAlarmUnit === unit && !hasAlertInfo) {
                 latestDiv.style.display = 'none';
                 lastAlarmUnit = null;
                 lastAlarmId = null;
             }
-            lastAlarmTime[unit] = currAlarm;
-            lastIncidentId[unit] = currInc || null;
+            lastAlarmIds[unit] = alarmId;
             if (info.lat && info.lon) {
                 if (vehicleMarkers[unit]) {
                     vehicleMarkers[unit].setLatLng([info.lat, info.lon]);

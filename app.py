@@ -551,8 +551,8 @@ def api_alert_incident(inc_id):
     """Alert the given units for an active incident.
 
     Each unit is assigned to the incident and its vehicle entry is updated
-    with the incident details. The vehicle status itself is not changed
-    here; dispatchers may adjust it manually after alerting.
+    with the incident details. Vehicles are automatically set to status 3,
+    indicating they are en route to the scene.
     """
     data = request.json or {}
     units = data.get('units', [])
@@ -578,7 +578,8 @@ def api_alert_incident(inc_id):
                 })
                 if unit in vehicles:
                     info = vehicles[unit]
-                    # Store incident details and mark alert time without changing status
+                    # Mark vehicle as en route and store incident details
+                    info['status'] = 3
                     info['note'] = inc['keyword']
                     info['location'] = inc['location']['name']
                     info['lat'] = inc['location']['lat']
