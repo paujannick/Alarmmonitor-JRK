@@ -1,5 +1,5 @@
 {
-    "RTW1": {"status": 2, "note": "", "location": "", "base": ""},
-    "RTW2": {"status": 2, "note": "", "location": "", "base": ""},
-    "KTW1": {"status": 2, "note": "", "location": "", "base": ""}
+    "RTW1": {"status": 2, "note": "", "location": "", "base": "", "alarm": null, "incident_id": null},
+    "RTW2": {"status": 2, "note": "", "location": "", "base": "", "alarm": null, "incident_id": null},
+    "KTW1": {"status": 2, "note": "", "location": "", "base": "", "alarm": null, "incident_id": null}
 }
