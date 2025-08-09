@@ -52,3 +52,49 @@ def test_alert_skips_vehicle_in_other_active_incident():
     assert 'RTW1' not in inc_b_data['vehicles']
     assert not [e for e in inc_b_data['log'] if e['unit'] == 'RTW1']
     assert app.vehicles['RTW1']['incident_id'] == inc_a
+
+
+def test_vehicle_status_reset_after_incident_end():
+    app, client = setup_app()
+    resp = client.post('/api/incidents', json={'keyword': 'Test', 'location': 'Loc'})
+    inc_id = resp.get_json()['id']
+
+    client.post(f'/api/incidents/{inc_id}/alert', json={'units': ['RTW1']})
+    assert app.vehicles['RTW1']['status'] == 3
+
+    client.post(f'/api/incidents/{inc_id}/end')
+    assert app.vehicles['RTW1']['status'] == 2
+
+
+def test_vehicle_can_be_alerted_again_after_incident_end():
+    app, client = setup_app()
+    resp = client.post('/api/incidents', json={'keyword': 'A', 'location': 'LocA'})
+    inc_a = resp.get_json()['id']
+    client.post(f'/api/incidents/{inc_a}/alert', json={'units': ['RTW1']})
+    client.post(f'/api/incidents/{inc_a}/end')
+
+    resp = client.post('/api/incidents', json={'keyword': 'B', 'location': 'LocB'})
+    inc_b = resp.get_json()['id']
+    resp = client.post(f'/api/incidents/{inc_b}/alert', json={'units': ['RTW1']})
+    data = resp.get_json()
+    assert 'RTW1' in data['alerted']
+    assert not data['skipped']
+    assert app.vehicles['RTW1']['incident_id'] == inc_b
+    assert app.vehicles['RTW1']['status'] == 3
+
+
+def test_vehicle_can_be_alerted_after_removed_from_incident():
+    app, client = setup_app()
+    resp = client.post('/api/incidents', json={'keyword': 'A', 'location': 'LocA'})
+    inc_a = resp.get_json()['id']
+    client.post(f'/api/incidents/{inc_a}/alert', json={'units': ['RTW1']})
+    client.put(f'/api/incidents/{inc_a}', json={'vehicles': []})
+
+    resp = client.post('/api/incidents', json={'keyword': 'B', 'location': 'LocB'})
+    inc_b = resp.get_json()['id']
+    resp = client.post(f'/api/incidents/{inc_b}/alert', json={'units': ['RTW1']})
+    data = resp.get_json()
+    assert 'RTW1' in data['alerted']
+    assert not data['skipped']
+    assert app.vehicles['RTW1']['incident_id'] == inc_b
+    assert app.vehicles['RTW1']['status'] == 3

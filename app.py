@@ -524,12 +524,16 @@ def api_end_incident(inc_id):
                         if other is not inc
                     ):
                         info = vehicles[unit]
+                        info['status'] = 2
                         info['note'] = ''
-                        info['location'] = ''
-                        info['lat'] = None
-                        info['lon'] = None
                         info['incident_id'] = None
                         info['alarm_time'] = None
+                        info['location'] = info.get('base', '')
+                        if info['location']:
+                            info['lat'], info['lon'] = geocode(info['location'])
+                        else:
+                            info['lat'] = None
+                            info['lon'] = None
             save_vehicles()
             save_incidents()
             return jsonify({'ok': True})
@@ -656,12 +660,16 @@ def api_update_incident(inc_id):
                             if other is not inc
                         ):
                             info = vehicles[unit]
+                            info['status'] = 2
                             info['note'] = ''
-                            info['location'] = ''
-                            info['lat'] = None
-                            info['lon'] = None
                             info['incident_id'] = None
                             info['alarm_time'] = None
+                            info['location'] = info.get('base', '')
+                            if info['location']:
+                                info['lat'], info['lon'] = geocode(info['location'])
+                            else:
+                                info['lat'] = None
+                                info['lon'] = None
                 save_vehicles()
             if note:
                 inc.setdefault('notes', []).append({'time': datetime.utcnow().isoformat(), 'text': note})
