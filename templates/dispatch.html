@@ -233,9 +233,13 @@ document.getElementById('incident-save').addEventListener('click', async () => {
   }
 });
 
+// Handle the "Alarmieren" button inside the incident modal
+// This creates or updates the incident and then alerts all selected vehicles
 document.getElementById('incident-alert').addEventListener('click', async () => {
   const f = document.getElementById('incident-form');
-  let id = f.elements['id'].value;
+  let id = f.elements['id'].value; // Existing incident id (empty when creating)
+
+  // Gather incident details from the form
   const details = {
     keyword: f.keyword.value,
     location: f.location.value,
@@ -244,6 +248,8 @@ document.getElementById('incident-alert').addEventListener('click', async () => 
   };
   const note = f.note.value.trim();
   if (note) details.note = note;
+
+  // Update an existing incident or create a new one if no id is present
   if (id) {
     await fetch(`/api/incidents/${id}`, {
       method: 'PUT',
@@ -257,9 +263,11 @@ document.getElementById('incident-alert').addEventListener('click', async () => 
       body: JSON.stringify(details)
     });
     const r = await res.json();
-    if (!r.ok) return;
+    if (!r.ok) return; // Abort if incident creation failed
     id = r.id;
   }
+
+  // Collect selected vehicles and alert them
   const units = Array.from(f.querySelectorAll('input[name="vehicles"]:checked')).map(cb => cb.value);
   if (units.length) {
     await fetch(`/api/incidents/${id}/alert`, {
@@ -268,6 +276,8 @@ document.getElementById('incident-alert').addEventListener('click', async () => 
       body: JSON.stringify({units})
     });
   }
+
+  // Close the modal and refresh the page to display updated data
   incidentModal.hide();
   window.location.reload();
 });

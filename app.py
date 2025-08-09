@@ -541,19 +541,28 @@ def api_delete_incident(inc_id):
 
 @app.route('/api/incidents/<int:inc_id>/alert', methods=['POST'])
 def api_alert_incident(inc_id):
+    """Alert the given units for an active incident.
+
+    Each unit is assigned to the incident and its vehicle entry is updated
+    with the incident details. Vehicles are automatically set to status 3
+    ("Auf Anfahrt"), indicating that they are en route to the scene.
+    """
     data = request.json or {}
     units = data.get('units', [])
     for inc in incidents:
         if inc['id'] == inc_id and inc.get('active'):
             for unit in units:
+                # Skip vehicles that are already bound to another active incident
                 if any(
                     other.get('active') and unit in other.get('vehicles', [])
                     for other in incidents
                 ):
                     continue
+                # Add the vehicle to this incident if not already present
                 if unit not in inc['vehicles']:
                     inc['vehicles'].append(unit)
                 now = datetime.utcnow().isoformat()
+                # Log the alarm time for the incident
                 inc.setdefault('log', []).append({
                     'time': now,
                     'unit': unit,
@@ -561,6 +570,8 @@ def api_alert_incident(inc_id):
                 })
                 if unit in vehicles:
                     info = vehicles[unit]
+                    # Mark vehicle as en route (status 3) and store incident details
+                    info['status'] = 3
                     info['note'] = inc['keyword']
                     info['location'] = inc['location']['name']
                     info['lat'] = inc['location']['lat']
