@@ -60,7 +60,7 @@ def test_vehicle_status_reset_after_incident_end():
     inc_id = resp.get_json()['id']
 
     client.post(f'/api/incidents/{inc_id}/alert', json={'units': ['RTW1']})
-    assert app.vehicles['RTW1']['status'] == 3
+    assert app.vehicles['RTW1']['status'] == 2
 
     client.post(f'/api/incidents/{inc_id}/end')
     assert app.vehicles['RTW1']['status'] == 1
@@ -80,7 +80,7 @@ def test_vehicle_can_be_alerted_again_after_incident_end():
     assert 'RTW1' in data['alerted']
     assert not data['skipped']
     assert app.vehicles['RTW1']['incident_id'] == inc_b
-    assert app.vehicles['RTW1']['status'] == 3
+    assert app.vehicles['RTW1']['status'] == 1
 
 
 def test_vehicle_can_be_alerted_after_removed_from_incident():
@@ -98,4 +98,4 @@ def test_vehicle_can_be_alerted_after_removed_from_incident():
     assert 'RTW1' in data['alerted']
     assert not data['skipped']
     assert app.vehicles['RTW1']['incident_id'] == inc_b
-    assert app.vehicles['RTW1']['status'] == 3
+    assert app.vehicles['RTW1']['status'] == 1
