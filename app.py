@@ -552,10 +552,10 @@ def api_alert_incident(inc_id):
     """Alert the given units for an active incident.
 
     Each unit is assigned to the incident and its vehicle entry is updated
-    with the incident details. Vehicles are automatically set to status 3,
-    indicating they are en route to the scene.  The response additionally
-    reports which units were alerted and which were skipped because they were
-    already bound to another active incident.
+    with the incident details. Vehicles retain their current status and are
+    not automatically set to status 3. The response additionally reports which
+    units were alerted and which were skipped because they were already bound
+    to another active incident.
     """
     data = request.json or {}
     units = data.get('units', [])
@@ -584,8 +584,7 @@ def api_alert_incident(inc_id):
                 })
                 if unit in vehicles:
                     info = vehicles[unit]
-                    # Mark vehicle as en route and store incident details
-                    info['status'] = 3
+                    # Store incident details without changing vehicle status
                     info['note'] = inc['keyword']
                     info['location'] = inc['location']['name']
                     info['lat'] = inc['location']['lat']

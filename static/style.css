@@ -49,6 +49,7 @@ tr.status-9 .status-color {
 
 #datetime {
   text-align: right;
+  font-size: 4rem;
 }
 
 /* Ensure form controls and modal content use dark text */

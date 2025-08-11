@@ -2,41 +2,53 @@
 {% block head_extra %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 {% endblock %}
+{% block container_class %}container-fluid p-0 vh-100 d-flex flex-column{% endblock %}
 {% block content %}
-<h1 class="mb-4">Alarmmonitor</h1>
-<div id="datetime" class="text-end text-secondary mb-3"></div>
-<button id="fullscreen" class="btn btn-secondary mb-3">Vollbild</button>
+<div class="flex-grow-0 px-3">
+<h1 class="mb-2">Alarmmonitor</h1>
+<div id="datetime" class="text-end text-secondary mb-2"></div>
+<button id="fullscreen" class="btn btn-secondary mb-2">Vollbild</button>
 <div id="latest-incident" class="alert alert-danger display-4" style="display:none;"></div>
-<button id="enable-audio" class="btn btn-secondary mb-3">Ton aktivieren</button>
-<div class="row">
-  <div class="col-md-6">
-    <div id="map" style="height:400px;" class="mb-3"></div>
+<button id="enable-audio" class="btn btn-secondary mb-2">Ton aktivieren</button>
+</div>
+<div class="row flex-grow-1 g-0">
+  <div class="col-md-6 h-100">
+    <div id="map" class="h-100"></div>
   </div>
-  <div class="col-md-6">
-    <table class="table table-dark table-striped" id="vehicle-table">
+  <div class="col-md-6 d-flex flex-column h-100">
+    <div id="vehicle-table-container" class="flex-grow-1 overflow-auto">
+      <table class="table table-dark table-striped" id="vehicle-table">
         <thead>
-            <tr>
-                <th>Fahrzeug / Funkrufname</th>
-                <th>Icon</th>
-                <th>Status</th>
-                <th>Hinweis</th>
-                <th>Ort</th>
-                <th>Farbe</th>
-            </tr>
+          <tr>
+            <th>Fahrzeug / Funkrufname</th>
+            <th>Icon</th>
+            <th>Status</th>
+            <th>Hinweis</th>
+            <th>Ort</th>
+            <th>Farbe</th>
+          </tr>
         </thead>
         <tbody>
         {% for name, info in vehicles.items() %}
-            <tr data-unit="{{ name }}" class="status-{{ info.status }}">
-                <td class="unit-cell"><strong>{{ info.name }}</strong><br><small>{{ info.callsign }}</small></td>
-                <td class="icon-cell">{% if info.icon %}<img src="{{ url_for('static', filename=info.icon) }}" height="24">{% endif %}</td>
-                <td class="status-text">{{ info.status }} - {{ status_text[info.status] }}</td>
-                <td class="note">{{ info.note }}</td>
-                <td class="location">{{ info.location }}</td>
-                <td class="status-color-cell"><span class="status-color"></span></td>
-            </tr>
+          <tr data-unit="{{ name }}" class="status-{{ info.status }}">
+            <td class="unit-cell"><strong>{{ info.name }}</strong><br><small>{{ info.callsign }}</small></td>
+            <td class="icon-cell">{% if info.icon %}<img src="{{ url_for('static', filename=info.icon) }}" height="24">{% endif %}</td>
+            <td class="status-text">{{ info.status }} - {{ status_text[info.status] }}</td>
+            <td class="note">{{ info.note }}</td>
+            <td class="location">{{ info.location }}</td>
+            <td class="status-color-cell"><span class="status-color"></span></td>
+          </tr>
         {% endfor %}
         </tbody>
-    </table>
+      </table>
+    </div>
+    <div id="crew-table-container" class="overflow-auto mt-3">
+      <h2>Besatzung</h2>
+      <table class="table table-dark table-striped" id="crew-table">
+        <thead><tr><th>Name</th><th>Position</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </div>
 </div>
 <audio id="alarm" preload="auto">
@@ -47,11 +59,12 @@
 {% block scripts %}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+const vehicleData = {{ vehicles|tojson }};
 const statusText = {{ status_text|tojson }};
 const lastAlarmIds = {};
 let lastAlarmUnit = null;
 const vehicleIcons = {};
-for (const [unit, info] of Object.entries({{ vehicles|tojson }})) {
+for (const [unit, info] of Object.entries(vehicleData)) {
     const initId = info.alarm_time || info.incident_id;
     lastAlarmIds[unit] = initId ? `${unit}:${initId}` : null;
     if (info.icon) {
@@ -63,6 +76,7 @@ const latestDiv = document.getElementById('latest-incident');
 const enableBtn = document.getElementById('enable-audio');
 const fullscreenBtn = document.getElementById('fullscreen');
 const datetimeEl = document.getElementById('datetime');
+const crewTableBody = document.querySelector('#crew-table tbody');
 let audioUnlocked = false;
 const ttsEl = new Audio();
 let lastAlarmId = null;
@@ -164,6 +178,27 @@ function speak(text) {
     });
 }
 
+function renderCrew(info) {
+    crewTableBody.innerHTML = '';
+    (info.crew || []).forEach(member => {
+        let name = '';
+        let position = '';
+        if (typeof member === 'string') {
+            const parts = member.split(':');
+            name = parts[0].trim();
+            position = (parts[1] || '').trim();
+        } else if (member) {
+            name = member.name || '';
+            position = member.position || '';
+        }
+        if (name) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${name}</td><td>${position}</td>`;
+            crewTableBody.appendChild(tr);
+        }
+    });
+}
+
 function triggerAlarm(unit, info, alarmId) {
     alarmId = alarmId || computeAlarmId(unit, info);
     if (alarmId === lastAlarmId) return;
@@ -177,6 +212,7 @@ function triggerAlarm(unit, info, alarmId) {
     const speechText = parts.join('. ');
     const displayText = `${info.note || ''} ${info.location || ''}`.trim();
     alarmQueue.push({alarmId, displayCallsign, speechText, displayText});
+    renderCrew(info);
     if (!alarmProcessing) {
         alarmProcessing = true;
         if (audioUnlocked) {
@@ -225,6 +261,7 @@ async function refresh() {
     const data = await statusRes.json();
     const incs = await incidentsRes.json();
     for (const [unit, info] of Object.entries(data)) {
+        vehicleData[unit] = info;
         const row = document.querySelector(`tr[data-unit="${unit}"]`);
         if (row) {
             row.className = `status-${info.status}`;
@@ -281,6 +318,12 @@ async function refresh() {
     }
     fitMapToAll();
 }
+document.querySelectorAll('#vehicle-table tbody tr').forEach(tr => {
+    tr.addEventListener('click', () => {
+        const unit = tr.dataset.unit;
+        renderCrew(vehicleData[unit] || {});
+    });
+});
 const evtSource = new EventSource('/events');
 evtSource.onmessage = () => refresh();
 refresh();
