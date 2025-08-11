@@ -44,8 +44,8 @@
     </div>
     <div id="crew-table-container" class="overflow-auto mt-3">
       <h2>Besatzung</h2>
-      <table class="table table-dark table-striped" id="crew-table">
-        <thead><tr><th>Name</th><th>Position</th></tr></thead>
+      <table class="table table-dark table-striped table-sm" id="crew-table">
+        <thead><tr><th>Fahrzeug</th><th>Name</th><th>Position</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -178,25 +178,27 @@ function speak(text) {
     });
 }
 
-function renderCrew(info) {
+function renderAllCrew() {
     crewTableBody.innerHTML = '';
-    (info.crew || []).forEach(member => {
-        let name = '';
-        let position = '';
-        if (typeof member === 'string') {
-            const parts = member.split(':');
-            name = parts[0].trim();
-            position = (parts[1] || '').trim();
-        } else if (member) {
-            name = member.name || '';
-            position = member.position || '';
-        }
-        if (name) {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${name}</td><td>${position}</td>`;
-            crewTableBody.appendChild(tr);
-        }
-    });
+    for (const [unit, info] of Object.entries(vehicleData)) {
+        (info.crew || []).forEach(member => {
+            let name = '';
+            let position = '';
+            if (typeof member === 'string') {
+                const parts = member.split(':');
+                name = parts[0].trim();
+                position = (parts[1] || '').trim();
+            } else if (member) {
+                name = member.name || '';
+                position = member.position || '';
+            }
+            if (name) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${unit}</td><td>${name}</td><td>${position}</td>`;
+                crewTableBody.appendChild(tr);
+            }
+        });
+    }
 }
 
 function triggerAlarm(unit, info, alarmId) {
@@ -212,7 +214,6 @@ function triggerAlarm(unit, info, alarmId) {
     const speechText = parts.join('. ');
     const displayText = `${info.note || ''} ${info.location || ''}`.trim();
     alarmQueue.push({alarmId, displayCallsign, speechText, displayText});
-    renderCrew(info);
     if (!alarmProcessing) {
         alarmProcessing = true;
         if (audioUnlocked) {
@@ -316,16 +317,12 @@ async function refresh() {
             delete incidentMarkers[inc.id];
         }
     }
+    renderAllCrew();
     fitMapToAll();
 }
-document.querySelectorAll('#vehicle-table tbody tr').forEach(tr => {
-    tr.addEventListener('click', () => {
-        const unit = tr.dataset.unit;
-        renderCrew(vehicleData[unit] || {});
-    });
-});
 const evtSource = new EventSource('/events');
 evtSource.onmessage = () => refresh();
+renderAllCrew();
 refresh();
 </script>
 {% endblock %}
