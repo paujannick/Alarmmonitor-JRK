@@ -15,12 +15,16 @@
     <input type="text" name="callsign" id="vehicle-callsign" class="form-control">
   </div>
   <div class="col-md-3">
-    <label class="form-label" for="vehicle-crew">Besatzung (Name:Position, kommagetrennt)</label>
-    <input type="text" name="crew" id="vehicle-crew" class="form-control">
-  </div>
-  <div class="col-md-3">
     <label class="form-label" for="vehicle-tts">Sprachausgabe</label>
     <input type="text" name="tts" id="vehicle-tts" class="form-control">
+  </div>
+  <div class="col-12">
+    <label class="form-label" for="vehicle-crew-table">Besatzung</label>
+    <table class="table table-sm" id="vehicle-crew-table">
+      <thead><tr><th>Name</th><th>Position</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button type="button" class="btn btn-secondary btn-sm" id="add-crew-row">Mitglied hinzufügen</button>
   </div>
   <div class="col-12">
     <button type="submit" class="btn btn-primary">Hinzufügen</button>
@@ -36,7 +40,21 @@
       <td>{{ name }}</td>
       <td><input type="text" class="form-control form-control-sm name" value="{{ info.name }}"></td>
       <td><input type="text" class="form-control form-control-sm callsign" value="{{ info.callsign }}"></td>
-      <td><input type="text" class="form-control form-control-sm crew" value="{{ info.crew|join(', ') }}"></td>
+      <td>
+        <table class="table table-sm mb-1 crew-table">
+          <tbody>
+          {% for member in info.crew %}
+            {% set parts = member.split(':') %}
+            <tr>
+              <td><input type="text" class="form-control form-control-sm crew-name" value="{{ parts[0] }}"></td>
+              <td><input type="text" class="form-control form-control-sm crew-position" value="{{ parts[1]|default('', true) }}"></td>
+              <td><button type="button" class="btn btn-sm btn-danger remove-crew">&times;</button></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        <button type="button" class="btn btn-sm btn-secondary add-crew">+</button>
+      </td>
       <td><input type="text" class="form-control form-control-sm tts" value="{{ info.tts }}"></td>
       <td>{{ info.status }}</td>
       <td class="icon-cell">
@@ -57,75 +75,110 @@
 </table>
 {% endblock %}
 {% block scripts %}
-<script>
-const form = document.getElementById('add-vehicle');
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const formData = Object.fromEntries(new FormData(form).entries());
-  if (formData.crew) {
-    formData.crew = formData.crew.split(',').map(s => s.trim()).filter(Boolean);
-  } else {
-    formData.crew = [];
+  <script>
+  function createCrewRow(name = '', position = '') {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><input type="text" class="form-control form-control-sm crew-name" value="${name}"></td>` +
+                   `<td><input type="text" class="form-control form-control-sm crew-position" value="${position}"></td>` +
+                   `<td><button type="button" class="btn btn-sm btn-danger remove-crew">&times;</button></td>`;
+    return tr;
   }
-  formData.tts = formData.tts || '';
-  const res = await fetch('/api/vehicles', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(formData)
+  function getCrewFromTable(table) {
+    const data = [];
+    table.querySelectorAll('tbody tr').forEach(row => {
+      const name = row.querySelector('.crew-name').value.trim();
+      const pos = row.querySelector('.crew-position').value.trim();
+      if (name) data.push(pos ? `${name}:${pos}` : name);
+    });
+    return data;
+  }
+  const newCrewTable = document.getElementById('vehicle-crew-table');
+  document.getElementById('add-crew-row').addEventListener('click', () => {
+    newCrewTable.querySelector('tbody').appendChild(createCrewRow());
   });
-  const r = await res.json();
-  if (r.ok) {
-    location.reload();
-  }
-});
-
-document.querySelectorAll('#vehicle-list .delete').forEach(btn => {
-  btn.addEventListener('click', async (e) => {
-    const unit = e.target.closest('tr').dataset.unit;
-    const res = await fetch(`/api/vehicles/${unit}`, {method:'DELETE'});
-    const r = await res.json();
-    if (r.ok) {
+  newCrewTable.addEventListener('click', e => {
+    if (e.target.classList.contains('remove-crew')) {
       e.target.closest('tr').remove();
     }
   });
-});
-
-document.querySelectorAll('#vehicle-list .save').forEach(btn => {
-  btn.addEventListener('click', async (e) => {
-    const tr = e.target.closest('tr');
-    const unit = tr.dataset.unit;
-    const payload = {
-      name: tr.querySelector('.name').value,
-      callsign: tr.querySelector('.callsign').value,
-      crew: tr.querySelector('.crew').value.split(',').map(s => s.trim()).filter(Boolean),
-      tts: tr.querySelector('.tts').value
-    };
-    const res = await fetch(`/api/vehicles/${unit}`, {
-      method: 'PUT',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload)
-    });
-    const r = await res.json();
-    if (r.ok) {
-      alert('Gespeichert');
-    }
-  });
-});
-
-document.querySelectorAll('#vehicle-list .icon-form').forEach(form => {
+  const form = document.getElementById('add-vehicle');
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const unit = form.closest('tr').dataset.unit;
-    const fd = new FormData(form);
-    const res = await fetch(`/api/vehicles/${unit}/icon`, {
+    const formData = Object.fromEntries(new FormData(form).entries());
+    formData.crew = getCrewFromTable(newCrewTable);
+    formData.tts = formData.tts || '';
+    const res = await fetch('/api/vehicles', {
       method: 'POST',
-      body: fd
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(formData)
     });
     const r = await res.json();
     if (r.ok) {
       location.reload();
     }
   });
-});
-</script>
+
+  document.querySelectorAll('#vehicle-list .add-crew').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const table = btn.previousElementSibling;
+      table.querySelector('tbody').appendChild(createCrewRow());
+    });
+  });
+  document.querySelectorAll('#vehicle-list .crew-table').forEach(table => {
+    table.addEventListener('click', e => {
+      if (e.target.classList.contains('remove-crew')) {
+        e.target.closest('tr').remove();
+      }
+    });
+  });
+
+  document.querySelectorAll('#vehicle-list .delete').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const unit = e.target.closest('tr').dataset.unit;
+      const res = await fetch(`/api/vehicles/${unit}`, {method:'DELETE'});
+      const r = await res.json();
+      if (r.ok) {
+        e.target.closest('tr').remove();
+      }
+    });
+  });
+
+  document.querySelectorAll('#vehicle-list .save').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const tr = e.target.closest('tr');
+      const unit = tr.dataset.unit;
+      const payload = {
+        name: tr.querySelector('.name').value,
+        callsign: tr.querySelector('.callsign').value,
+        crew: getCrewFromTable(tr.querySelector('.crew-table')),
+        tts: tr.querySelector('.tts').value
+      };
+      const res = await fetch(`/api/vehicles/${unit}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const r = await res.json();
+      if (r.ok) {
+        alert('Gespeichert');
+      }
+    });
+  });
+
+  document.querySelectorAll('#vehicle-list .icon-form').forEach(form => {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const unit = form.closest('tr').dataset.unit;
+      const fd = new FormData(form);
+      const res = await fetch(`/api/vehicles/${unit}/icon`, {
+        method: 'POST',
+        body: fd
+      });
+      const r = await res.json();
+      if (r.ok) {
+        location.reload();
+      }
+    });
+  });
+  </script>
 {% endblock %}
