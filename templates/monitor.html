@@ -16,7 +16,7 @@
     <div id="map" class="h-100"></div>
   </div>
   <div class="col-md-6 d-flex flex-column h-100">
-    <div id="vehicle-table-container" class="flex-grow-1 overflow-auto">
+    <div id="vehicle-table-container" class="flex-grow-1 overflow-hidden">
       <table class="table table-dark table-striped" id="vehicle-table">
         <thead>
           <tr>
@@ -42,7 +42,7 @@
         </tbody>
       </table>
     </div>
-    <div id="crew-table-container" class="overflow-auto mt-3">
+    <div id="crew-table-container" class="overflow-hidden mt-3">
       <h2>Besatzung</h2>
       <table class="table table-dark table-striped table-sm" id="crew-table">
         <thead><tr><th>Fahrzeug</th><th>Name</th><th>Position</th></tr></thead>
@@ -82,11 +82,28 @@ const ttsEl = new Audio();
 let lastAlarmId = null;
 const alarmQueue = [];
 let alarmProcessing = false;
+let refreshing = false;
+let refreshQueued = false;
 const map = L.map('map').setView([50.517, 8.816], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '© OpenStreetMap'}).addTo(map);
 const vehicleMarkers = {};
 const incidentMarkers = {};
 const iconBase = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/';
+
+function scaleMonitor() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const cw = document.body.scrollWidth;
+    const ch = document.body.scrollHeight;
+    const scale = Math.min(w / cw, h / ch);
+    document.body.style.transformOrigin = '0 0';
+    document.body.style.transform = `scale(${scale})`;
+    document.body.style.width = `${100 / scale}%`;
+    document.body.style.height = `${100 / scale}%`;
+    map.invalidateSize();
+}
+window.addEventListener('resize', scaleMonitor);
+document.addEventListener('DOMContentLoaded', scaleMonitor);
 function computeAlarmId(unit, info) {
     const uniqueId = info.alarm_time || info.incident_id || Date.now();
     return `${unit}:${uniqueId}`;
@@ -255,13 +272,19 @@ function processAlarmQueue() {
 }
 
 async function refresh() {
-    const [statusRes, incidentsRes] = await Promise.all([
-        fetch('/api/status'),
-        fetch('/api/incidents')
-    ]);
-    const data = await statusRes.json();
-    const incs = await incidentsRes.json();
-    for (const [unit, info] of Object.entries(data)) {
+    if (refreshing) {
+        refreshQueued = true;
+        return;
+    }
+    refreshing = true;
+    try {
+        const [statusRes, incidentsRes] = await Promise.all([
+            fetch('/api/status'),
+            fetch('/api/incidents')
+        ]);
+        const data = await statusRes.json();
+        const incs = await incidentsRes.json();
+        for (const [unit, info] of Object.entries(data)) {
         vehicleData[unit] = info;
         const row = document.querySelector(`tr[data-unit="${unit}"]`);
         if (row) {
@@ -319,6 +342,13 @@ async function refresh() {
     }
     renderAllCrew();
     fitMapToAll();
+    } finally {
+        refreshing = false;
+        if (refreshQueued) {
+            refreshQueued = false;
+            refresh();
+        }
+    }
 }
 const evtSource = new EventSource('/events');
 evtSource.onmessage = () => refresh();
