@@ -1,6 +1,9 @@
 {% extends 'base.html' %}
 {% block head_extra %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  html, body { overflow: hidden; }
+</style>
 {% endblock %}
 {% block container_class %}container-fluid p-0 vh-100 d-flex flex-column{% endblock %}
 {% block content %}
