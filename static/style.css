@@ -116,9 +116,10 @@ body {
 
 .monitor-table-body {
   flex: 1 1 auto;
-  overflow: auto;
+  overflow: hidden;
   padding: 1rem 1.5rem 1.5rem;
   transition: padding-top 0.2s ease;
+  position: relative;
 }
 
 .monitor-table.has-alert .monitor-table-body {
@@ -130,6 +131,12 @@ body {
   font-size: clamp(0.9rem, 1.1vw, 1.15rem);
   border-collapse: separate;
   border-spacing: 0;
+}
+
+.monitor-table-body.table-scaled table td,
+.monitor-table-body.table-scaled table th {
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
 }
 
 .monitor-table thead th {

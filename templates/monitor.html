@@ -102,6 +102,64 @@ const map = L.map('map').setView([50.517, 8.816], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '© OpenStreetMap'}).addTo(map);
 const vehicleMarkers = {};
 const incidentMarkers = {};
+const tableContainer = document.getElementById('vehicle-table-container');
+const vehicleTableEl = document.getElementById('vehicle-table');
+let vehicleTableBaseFontSize = null;
+let pendingTableResize = false;
+
+function ensureVehicleTableBaseFontSize() {
+    if (!vehicleTableEl) return null;
+    if (!vehicleTableBaseFontSize) {
+        vehicleTableEl.style.fontSize = '';
+        vehicleTableBaseFontSize = parseFloat(window.getComputedStyle(vehicleTableEl).fontSize);
+        if (!vehicleTableBaseFontSize) {
+            vehicleTableBaseFontSize = 16;
+        }
+    }
+    return vehicleTableBaseFontSize;
+}
+
+function adjustVehicleTableSize() {
+    if (!tableContainer || !vehicleTableEl) return;
+    const tbody = vehicleTableEl.tBodies[0];
+    if (!tbody || !tbody.rows.length) return;
+    const baseFontSize = ensureVehicleTableBaseFontSize();
+    if (!baseFontSize) return;
+    if (pendingTableResize) return;
+    pendingTableResize = true;
+    tableContainer.classList.remove('table-scaled');
+    vehicleTableEl.style.fontSize = `${baseFontSize}px`;
+    requestAnimationFrame(() => {
+        const thead = vehicleTableEl.tHead;
+        const availableHeight = tableContainer.clientHeight;
+        const headerHeight = thead ? thead.getBoundingClientRect().height : 0;
+        const rows = Array.from(tbody.rows);
+        const totalRowHeight = rows.reduce((sum, row) => sum + row.getBoundingClientRect().height, 0);
+        const maxContentHeight = Math.max(availableHeight - headerHeight, 0);
+        if (!totalRowHeight || maxContentHeight <= 0) {
+            vehicleTableEl.style.fontSize = `${baseFontSize}px`;
+            tableContainer.classList.remove('table-scaled');
+            pendingTableResize = false;
+            return;
+        }
+        let scale = maxContentHeight / totalRowHeight;
+        if (!Number.isFinite(scale) || scale <= 0) scale = 1;
+        const minScale = 0.35;
+        scale = Math.min(1, Math.max(minScale, scale));
+        vehicleTableEl.style.fontSize = `${baseFontSize * scale}px`;
+        requestAnimationFrame(() => {
+            const tableHeight = vehicleTableEl.getBoundingClientRect().height;
+            const containerHeight = tableContainer.clientHeight;
+            if (tableHeight > containerHeight + 1 && scale > minScale) {
+                const adjustedScale = Math.max(minScale, scale * (containerHeight / tableHeight));
+                vehicleTableEl.style.fontSize = `${baseFontSize * adjustedScale}px`;
+                scale = adjustedScale;
+            }
+            tableContainer.classList.toggle('table-scaled', scale < 0.999);
+            pendingTableResize = false;
+        });
+    });
+}
 const iconBase = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/';
 
 function resizeMap() {
@@ -112,7 +170,22 @@ window.addEventListener('load', resizeMap);
 document.addEventListener('DOMContentLoaded', () => {
     resizeMap();
     setTimeout(resizeMap, 200);
+    adjustVehicleTableSize();
+    setTimeout(adjustVehicleTableSize, 250);
 });
+
+if (tableContainer) {
+    window.addEventListener('resize', adjustVehicleTableSize);
+    if ('ResizeObserver' in window) {
+        const tableResizeObserver = new ResizeObserver(() => adjustVehicleTableSize());
+        tableResizeObserver.observe(tableContainer);
+    }
+}
+
+if (vehicleTableEl && vehicleTableEl.tBodies && vehicleTableEl.tBodies[0] && 'MutationObserver' in window) {
+    const tableMutationObserver = new MutationObserver(() => adjustVehicleTableSize());
+    tableMutationObserver.observe(vehicleTableEl.tBodies[0], {childList: true, subtree: true, characterData: true});
+}
 function computeAlarmId(unit, info) {
     const uniqueId = info.alarm_time || info.incident_id || Date.now();
     return `${unit}:${uniqueId}`;
@@ -279,10 +352,12 @@ function setLatestIncidentVisible(visible) {
         latestDiv.style.display = 'block';
         latestDiv.classList.add('visible');
         if (container) container.classList.add('has-alert');
+        requestAnimationFrame(adjustVehicleTableSize);
     } else {
         latestDiv.style.display = 'none';
         latestDiv.classList.remove('visible');
         if (container) container.classList.remove('has-alert');
+        requestAnimationFrame(adjustVehicleTableSize);
     }
 }
 
@@ -364,6 +439,7 @@ async function refresh() {
             delete incidentMarkers[inc.id];
         }
     }
+    adjustVehicleTableSize();
     fitMapToAll();
     } catch (err) {
         console.error('Aktualisierung fehlgeschlagen', err);
