@@ -87,17 +87,22 @@ tr.status-9 .status-color {
 
 .dispatch-card {
   min-width: 0;
-  background-color: #1f1f1f;
+  background: linear-gradient(160deg, rgba(33, 37, 41, 0.95), rgba(12, 12, 12, 0.92));
   color: #fff;
   border-color: rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
 }
 
 .dispatch-card .card-header {
-  border-bottom-color: rgba(255, 255, 255, 0.1);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.35), rgba(255, 255, 255, 0.05));
 }
 
 .dispatch-card .card-header small {
-  color: rgba(255, 255, 255, 0.6);
+  color: #f8f9fa;
+  letter-spacing: 0.08em;
 }
 
 .dispatch-card .availability {
@@ -157,4 +162,202 @@ tr.status-9 .status-color {
   color: #fff;
   border-color: #0d6efd;
   box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.dispatch-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, rgba(220, 53, 69, 0.18), rgba(13, 110, 253, 0.12));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+}
+
+.dispatch-toolbar h1 {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.dispatch-toolbar .btn-lg {
+  padding-inline: 2.5rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.dispatch-callsign {
+  font-size: 0.8rem;
+  opacity: 0.9;
+}
+
+.incident-actions .incident-tag {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  background: rgba(220, 53, 69, 0.2) !important;
+  border: 1px solid rgba(220, 53, 69, 0.4);
+}
+
+.incident-actions .incident-jump {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: 0 10px 25px rgba(255, 193, 7, 0.25);
+}
+
+.dispatch-panel {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.dispatch-panel .table thead {
+  background: rgba(255, 255, 255, 0.05);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dispatch-panel .table tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.incident-actions-col {
+  white-space: nowrap;
+}
+
+.incident-modal {
+  background: #1b1f24;
+  color: #f8f9fa;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.incident-modal .modal-body {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 0.85rem;
+  margin: 0 1rem 1rem;
+  padding: 1.5rem;
+}
+
+.incident-modal .modal-footer,
+.incident-modal .modal-header {
+  background: transparent;
+}
+
+.modal-subtitle {
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+}
+
+.incident-form .form-control,
+.incident-form .form-select {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #f8f9fa;
+}
+
+.incident-form .form-control:focus,
+.incident-form .form-select:focus {
+  background-color: rgba(0, 0, 0, 0.35);
+  color: #f8f9fa;
+  border-color: rgba(13, 110, 253, 0.6);
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.2);
+}
+
+.incident-section {
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.incident-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.incident-section .section-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.incident-section .section-meta {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.incident-vehicle-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.incident-vehicle-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.incident-vehicle-option .form-check-input {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.incident-vehicle-option .vehicle-label-text {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.incident-vehicle-option .alarm-indicator {
+  margin-left: auto;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(108, 117, 125, 0.2);
+  border: 1px solid rgba(108, 117, 125, 0.4);
+  color: rgba(248, 249, 250, 0.75);
+}
+
+.incident-vehicle-option .alarm-indicator.active {
+  background: rgba(220, 53, 69, 0.2);
+  border-color: rgba(220, 53, 69, 0.5);
+  color: #f8d7da;
+}
+
+.incident-vehicle-option:hover {
+  border-color: rgba(13, 110, 253, 0.45);
+  box-shadow: 0 10px 25px rgba(13, 110, 253, 0.2);
+}
+
+.incident-vehicle-option.selected {
+  border-color: rgba(13, 110, 253, 0.65);
+  background: rgba(13, 110, 253, 0.15);
+}
+
+.incident-vehicle-option.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.incident-vehicle-option.disabled:hover {
+  border-color: transparent;
 }
