@@ -350,6 +350,16 @@ def vehicles_page():
     return render_template('vehicles.html', title='Fahrzeuge', vehicles=vehicles)
 
 
+@app.route('/vehicle-status')
+def vehicle_status_page():
+    return render_template(
+        'vehicle_status.html',
+        title='Fahrzeugstatus',
+        vehicles=vehicles,
+        status_text=STATUS_TEXT,
+    )
+
+
 @app.route('/api/status')
 def api_status():
     return jsonify(vehicles)

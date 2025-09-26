@@ -65,3 +65,22 @@ tr.status-9 .status-color {
 .modal-content {
   color: #000;
 }
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+}
+
+.status-card {
+  min-width: 0;
+}
+
+.status-card .status-buttons {
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.status-card .status-buttons .status-btn {
+  flex: 1 1 48px;
+}
