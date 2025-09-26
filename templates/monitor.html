@@ -17,45 +17,54 @@
 {% endblock %}
 {% block container_class %}container-fluid p-0 vh-100 d-flex flex-column{% endblock %}
 {% block content %}
-<div class="flex-grow-0 px-3">
-<h1 class="mb-2">Alarmmonitor</h1>
-<div id="datetime" class="text-end text-secondary mb-2"></div>
-<button id="fullscreen" class="btn btn-secondary mb-2">Vollbild</button>
-<div id="latest-incident" class="alert alert-danger display-4" style="display:none;"></div>
-<button id="enable-audio" class="btn btn-secondary mb-2">Ton aktivieren</button>
-</div>
-<div class="row flex-grow-1 g-0">
-  <div class="col-md-6 h-100">
-    <div id="map" class="h-100"></div>
-  </div>
-  <div class="col-md-6 d-flex flex-column h-100">
-    <div id="vehicle-table-container" class="flex-grow-1 overflow-hidden">
-      <table class="table table-dark table-striped" id="vehicle-table">
-        <thead>
-          <tr>
-            <th>Fahrzeug / Funkrufname</th>
-            <th>Icon</th>
-            <th>Status</th>
-            <th>Hinweis</th>
-            <th>Ort</th>
-            <th>Farbe</th>
-          </tr>
-        </thead>
-        <tbody>
-        {% for name, info in vehicles.items() %}
-          <tr data-unit="{{ name }}" class="status-{{ info.status }}">
-            <td class="unit-cell"><strong>{{ info.name }}</strong><br><small>{{ info.callsign }}</small></td>
-            <td class="icon-cell">{% if info.icon %}<img src="{{ url_for('static', filename=info.icon) }}" height="24">{% endif %}</td>
-            <td class="status-text">{{ info.status }} - {{ status_text[info.status] }}</td>
-            <td class="note">{{ info.note }}</td>
-            <td class="location">{{ info.location }}</td>
-            <td class="status-color-cell"><span class="status-color"></span></td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+<div class="monitor-page">
+  <header class="monitor-header">
+    <div class="monitor-title">
+      <h1 class="mb-1">Alarmmonitor</h1>
+      <p class="mb-0 text-white-50">Live Übersicht für Einsätze &amp; Fahrzeuge</p>
     </div>
-  </div>
+    <div class="monitor-meta">
+      <div class="monitor-time text-end" id="datetime"></div>
+      <div class="monitor-controls">
+        <button id="enable-audio" class="btn btn-outline-light btn-sm">Ton aktivieren</button>
+        <button id="fullscreen" class="btn btn-outline-light btn-sm">Vollbild</button>
+      </div>
+    </div>
+  </header>
+  <main class="monitor-content">
+    <section class="monitor-map" aria-label="Karte">
+      <div id="map" class="monitor-map-canvas"></div>
+    </section>
+    <section class="monitor-table" aria-label="Fahrzeugstatus">
+      <div id="latest-incident" class="monitor-alert alert alert-danger" role="status" style="display:none;"></div>
+      <div id="vehicle-table-container" class="monitor-table-body">
+        <table class="table table-dark table-striped" id="vehicle-table">
+          <thead>
+            <tr>
+              <th>Fahrzeug / Funkrufname</th>
+              <th>Icon</th>
+              <th>Status</th>
+              <th>Hinweis</th>
+              <th>Ort</th>
+              <th>Farbe</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for name, info in vehicles.items() %}
+            <tr data-unit="{{ name }}" class="status-{{ info.status }}">
+              <td class="unit-cell"><strong>{{ info.name }}</strong><br><small>{{ info.callsign }}</small></td>
+              <td class="icon-cell">{% if info.icon %}<img src="{{ url_for('static', filename=info.icon) }}" height="28" width="28" class="rounded-circle bg-dark p-1">{% endif %}</td>
+              <td class="status-text">{{ info.status }} - {{ status_text[info.status] }}</td>
+              <td class="note">{{ info.note }}</td>
+              <td class="location">{{ info.location }}</td>
+              <td class="status-color-cell"><span class="status-color"></span></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
 </div>
 <audio id="alarm" preload="auto">
   <source src="{{ url_for('static', filename='gong.mp3') }}" type="audio/mpeg">
@@ -95,20 +104,15 @@ const vehicleMarkers = {};
 const incidentMarkers = {};
 const iconBase = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/';
 
-function scaleMonitor() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    const cw = document.body.scrollWidth;
-    const ch = document.body.scrollHeight;
-    const scale = Math.min(w / cw, h / ch);
-    document.body.style.transformOrigin = '0 0';
-    document.body.style.transform = `scale(${scale})`;
-    document.body.style.width = `${100 / scale}%`;
-    document.body.style.height = `${100 / scale}%`;
-    map.invalidateSize();
+function resizeMap() {
+    requestAnimationFrame(() => map.invalidateSize());
 }
-window.addEventListener('resize', scaleMonitor);
-document.addEventListener('DOMContentLoaded', scaleMonitor);
+window.addEventListener('resize', resizeMap);
+window.addEventListener('load', resizeMap);
+document.addEventListener('DOMContentLoaded', () => {
+    resizeMap();
+    setTimeout(resizeMap, 200);
+});
 function computeAlarmId(unit, info) {
     const uniqueId = info.alarm_time || info.incident_id || Date.now();
     return `${unit}:${uniqueId}`;

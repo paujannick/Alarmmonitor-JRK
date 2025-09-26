@@ -549,6 +549,12 @@ incidentModalEl.addEventListener('show.bs.modal', () => {
   incidentError.classList.add('d-none');
   incidentError.textContent = '';
 });
+incidentModalEl.addEventListener('shown.bs.modal', () => {
+  const focusTarget = incidentModalEl.querySelector('#incident-keyword');
+  if (focusTarget) {
+    focusTarget.focus();
+  }
+});
 
 let autoReloadPauseCount = 0;
 let reloadPending = false;
