@@ -99,3 +99,26 @@ def test_vehicle_can_be_alerted_after_removed_from_incident():
     assert not data['skipped']
     assert app.vehicles['RTW1']['incident_id'] == inc_b
     assert app.vehicles['RTW1']['status'] == 1
+
+
+def test_alert_handles_legacy_string_location():
+    app, client = setup_app()
+    app.incidents.append({
+        'id': 1,
+        'start': '2025-01-01T00:00:00',
+        'location': 'Altstadt',
+        'vehicles': [],
+        'keyword': 'Test',
+        'notes': [],
+        'log': [],
+        'active': True,
+        'priority': '',
+        'patient': '',
+    })
+
+    resp = client.post('/api/incidents/1/alert', json={'units': ['RTW1']})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data['alerted'] == ['RTW1']
+    assert not data['skipped']
+    assert app.vehicles['RTW1']['location'] == 'Altstadt'

@@ -118,14 +118,40 @@ def save_vehicles():
     notify_change()
 
 
+def normalise_incident(incident):
+    """Ensure legacy incident entries have the structure newer code expects."""
+
+    loc = incident.get('location')
+    if isinstance(loc, dict):
+        name = loc.get('name') or ''
+        lat = loc.get('lat')
+        lon = loc.get('lon')
+    else:
+        name = loc or ''
+        lat = None
+        lon = None
+
+    # Fall back to legacy top-level lat/lon fields if the mapping has no coords
+    if lat is None:
+        lat = incident.get('lat')
+    if lon is None:
+        lon = incident.get('lon')
+
+    incident['location'] = {'name': name, 'lat': lat, 'lon': lon}
+    incident.setdefault('vehicles', [])
+    incident.setdefault('notes', [])
+    incident.setdefault('log', [])
+    incident.setdefault('active', True)
+    incident.setdefault('priority', '')
+    incident.setdefault('patient', '')
+    return incident
+
+
 def load_incidents():
     if INCIDENT_FILE.exists():
         with open(INCIDENT_FILE, encoding='utf-8') as f:
             data = json.load(f)
-            for inc in data:
-                inc.setdefault('priority', '')
-                inc.setdefault('patient', '')
-            return data
+            return [normalise_incident(inc) for inc in data]
     return []
 
 
@@ -568,6 +594,7 @@ def api_alert_incident(inc_id):
     units = data.get('units', [])
     for inc in incidents:
         if inc['id'] == inc_id and inc.get('active'):
+            inc = normalise_incident(inc)
             alerted = []
             skipped = []
             for unit in units:
@@ -609,7 +636,7 @@ def api_alert_incident(inc_id):
 def api_get_incident(inc_id):
     for inc in incidents:
         if inc['id'] == inc_id:
-            return jsonify(inc)
+            return jsonify(normalise_incident(inc))
     return jsonify({'ok': False}), 404
 
 
@@ -618,6 +645,7 @@ def api_update_incident(inc_id):
     data = request.json or {}
     for inc in incidents:
         if inc['id'] == inc_id:
+            inc = normalise_incident(inc)
             keyword = data.get('keyword')
             loc = data.get('location') or {}
             loc_name = loc.get('name') if isinstance(loc, dict) else loc
