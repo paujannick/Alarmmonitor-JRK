@@ -49,10 +49,9 @@
   <div class="col-md-3">
     <select name="priority" class="form-select">
       <option value="">--</option>
-      <option value="R0">R0</option>
-      <option value="R1">R1</option>
-      <option value="R2">R2</option>
-      <option value="R3">R3</option>
+      {% for prio in priorities %}
+      <option value="{{ prio }}">{{ prio }}</option>
+      {% endfor %}
     </select>
   </div>
   <div class="col-12">
@@ -67,7 +66,17 @@
       <td>{{ t.id }}</td>
       <td><input type="text" class="form-control form-control-sm label" value="{{ t.label }}"></td>
       <td><input type="text" class="form-control form-control-sm keyword" value="{{ t.keyword }}"></td>
-      <td><input type="text" class="form-control form-control-sm priority" value="{{ t.priority }}"></td>
+      <td>
+        <select class="form-select form-select-sm priority">
+          <option value="">--</option>
+          {% for prio in priorities %}
+          <option value="{{ prio }}" {% if prio == t.priority %}selected{% endif %}>{{ prio }}</option>
+          {% endfor %}
+          {% if t.priority and t.priority not in priorities %}
+          <option value="{{ t.priority }}" selected>{{ t.priority }}</option>
+          {% endif %}
+        </select>
+      </td>
       <td>
         <button class="btn btn-sm btn-primary save-template">Speichern</button>
         <button class="btn btn-sm btn-danger delete-template">Löschen</button>
@@ -76,6 +85,25 @@
   {% endfor %}
   </tbody>
 </table>
+
+<h2 class="mt-4">Prioritäten</h2>
+<form id="priority-form" class="mb-3">
+  <table class="table" id="priority-table">
+    <thead><tr><th>Bezeichnung</th><th>Aktion</th></tr></thead>
+    <tbody>
+    {% for prio in priorities %}
+      <tr>
+        <td><input type="text" class="form-control form-control-sm priority-value" value="{{ prio }}"></td>
+        <td><button type="button" class="btn btn-sm btn-danger priority-delete">Löschen</button></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <div class="d-flex gap-2">
+    <button type="button" class="btn btn-secondary" id="priority-add">Neue Priorität</button>
+    <button type="submit" class="btn btn-primary">Speichern</button>
+  </div>
+</form>
 {% endblock %}
 
 {% block scripts %}
@@ -161,6 +189,53 @@ document.querySelectorAll('#template-table .delete-template').forEach(btn => {
       tr.remove();
     }
   });
+});
+
+const priorityTableBody = document.querySelector('#priority-table tbody');
+
+function escapePriorityValue(value) {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+}
+
+function addPriorityRow(value = '') {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" class="form-control form-control-sm priority-value" value="${escapePriorityValue(value)}"></td>
+    <td><button type="button" class="btn btn-sm btn-danger priority-delete">Löschen</button></td>
+  `;
+  priorityTableBody.appendChild(tr);
+}
+
+document.getElementById('priority-add').addEventListener('click', () => {
+  addPriorityRow();
+});
+
+priorityTableBody.addEventListener('click', (e) => {
+  if (e.target.classList.contains('priority-delete')) {
+    e.target.closest('tr').remove();
+  }
+});
+
+if (!priorityTableBody.children.length) {
+  addPriorityRow();
+}
+
+document.getElementById('priority-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const values = Array.from(priorityTableBody.querySelectorAll('.priority-value'))
+    .map(input => input.value.trim())
+    .filter((value, index, arr) => value && arr.indexOf(value) === index);
+  const res = await fetch('/api/priorities', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({priorities: values})
+  });
+  const result = await res.json();
+  if (result.ok) {
+    location.reload();
+  } else {
+    alert('Prioritäten konnten nicht gespeichert werden.');
+  }
 });
 </script>
 {% endblock %}
