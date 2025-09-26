@@ -29,6 +29,51 @@
 </form>
 <div id="result" class="mt-3 mb-4"></div>
 
+<div class="alert alert-danger d-none" role="alert" id="dispatch-status-error"></div>
+
+<h2 class="mt-5">Fahrzeugübersicht</h2>
+<div id="dispatch-vehicle-board" class="status-grid">
+  {% for name, info in vehicles.items() %}
+  <div class="card status-card dispatch-card" data-unit="{{ name }}">
+    <div class="card-header d-flex justify-content-between align-items-start">
+      <div>
+        <h5 class="card-title mb-0">{{ name }}</h5>
+        <small class="text-muted">{{ info.callsign or info.name }}</small>
+      </div>
+      <span class="availability badge rounded-pill"></span>
+    </div>
+    <div class="card-body">
+      <p class="current-status mb-3">
+        <span class="badge bg-primary">Status {{ info.status }} – {{ status_text[info.status] }}</span>
+      </p>
+      <div class="dispatch-meta mb-3">
+        <span class="meta-label">Ort</span>
+        <span class="meta-value dispatch-location">{{ info.location or '—' }}</span>
+      </div>
+      <div class="dispatch-meta mb-3">
+        <span class="meta-label">Stichwort</span>
+        <span class="meta-value dispatch-note">{{ info.note or '—' }}</span>
+      </div>
+      <div class="dispatch-meta mb-3">
+        <span class="meta-label">Priorität</span>
+        <span class="meta-value dispatch-priority">{{ info.priority or '—' }}</span>
+      </div>
+      <div class="dispatch-meta mb-4">
+        <span class="meta-label">Alarmiert</span>
+        <span class="meta-value dispatch-alarm" data-raw="{{ info.alarm_time or '' }}">{{ info.alarm_time or '—' }}</span>
+      </div>
+      <div class="d-flex status-buttons">
+        {% for code in [0, 1, 2, 3, 4, 5, 6] %}
+        <button type="button" class="btn btn-sm status-btn {% if code == info.status %}btn-primary{% else %}btn-outline-secondary{% endif %}" data-status="{{ code }}" title="Status {{ code }} – {{ status_text[code] }}">
+          {{ code }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
 <h2 class="mt-5 d-flex justify-content-between align-items-center">Einsätze <button class="btn btn-danger btn-sm" id="incident-new">Einsatz anlegen</button></h2>
 <table class="table table-striped" id="incident-list">
   <thead>
@@ -146,9 +191,234 @@
 const form = document.getElementById('dispatch-form');
 const vehiclesData = {{ vehicles|tojson }};
 const availableData = {{ available|tojson }};
+const statusText = {{ status_text|tojson }};
+const statusShortcuts = [0, 1, 2, 3, 4, 5, 6];
+const statusBoard = document.getElementById('dispatch-vehicle-board');
+const statusError = document.getElementById('dispatch-status-error');
 const unitSelect = form.querySelector('select[name="unit"]');
 const statusSelect = form.querySelector('select[name="status"]');
 const locationInput = form.querySelector('input[name="location"]');
+
+function hideStatusError() {
+  if (!statusError) return;
+  statusError.classList.add('d-none');
+  statusError.textContent = '';
+}
+
+function showStatusError(message) {
+  if (!statusError) return;
+  statusError.textContent = message;
+  statusError.classList.remove('d-none');
+}
+
+function getStatusLabel(status) {
+  const key = String(status);
+  const label = statusText[key] || '';
+  return `Status ${status} – ${label}`;
+}
+
+function formatDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('de-DE');
+}
+
+function updateVehiclesState(data) {
+  Object.keys(vehiclesData).forEach(key => {
+    if (!(key in data)) {
+      delete vehiclesData[key];
+    }
+  });
+  Object.entries(data).forEach(([key, value]) => {
+    vehiclesData[key] = value;
+  });
+}
+
+function updateAvailabilityData() {
+  Object.keys(availableData).forEach(key => delete availableData[key]);
+  Object.entries(vehiclesData).forEach(([unit, info]) => {
+    const status = Number(info.status);
+    const isAvailable = (status === 1 || status === 2) && !info.incident_id;
+    availableData[unit] = isAvailable;
+  });
+}
+
+function refreshUnitSelect() {
+  const units = Object.keys(vehiclesData).sort((a, b) => a.localeCompare(b, 'de-DE', { numeric: true }));
+  const current = unitSelect.value;
+  unitSelect.innerHTML = '';
+  units.forEach(unit => {
+    const option = document.createElement('option');
+    option.value = unit;
+    option.textContent = unit;
+    unitSelect.appendChild(option);
+  });
+  if (units.length) {
+    unitSelect.value = units.includes(current) ? current : units[0];
+  }
+}
+
+function updateDispatchCard(card, info) {
+  const status = Number(info.status);
+  card.dataset.status = status;
+  const statusBadge = card.querySelector('.current-status .badge');
+  if (statusBadge) {
+    statusBadge.textContent = getStatusLabel(status);
+  }
+  const availabilityBadge = card.querySelector('.availability');
+  if (availabilityBadge) {
+    const isAvailable = (status === 1 || status === 2) && !info.incident_id;
+    availabilityBadge.textContent = isAvailable ? 'Frei' : 'Gebunden';
+    availabilityBadge.classList.toggle('bg-success', isAvailable);
+    availabilityBadge.classList.toggle('bg-danger', !isAvailable);
+    availabilityBadge.classList.toggle('bg-secondary', false);
+  }
+  const locationEl = card.querySelector('.dispatch-location');
+  if (locationEl) {
+    locationEl.textContent = info.location || '—';
+  }
+  const noteEl = card.querySelector('.dispatch-note');
+  if (noteEl) {
+    noteEl.textContent = info.note || '—';
+  }
+  const prioEl = card.querySelector('.dispatch-priority');
+  if (prioEl) {
+    prioEl.textContent = info.priority || '—';
+  }
+  const alarmEl = card.querySelector('.dispatch-alarm');
+  if (alarmEl) {
+    alarmEl.dataset.raw = info.alarm_time || '';
+    alarmEl.textContent = formatDateTime(info.alarm_time);
+  }
+  const secondary = card.querySelector('.card-header small');
+  if (secondary) {
+    secondary.textContent = info.callsign || info.name || '';
+  }
+  card.classList.toggle('active-incident', Boolean(info.incident_id));
+  card.querySelectorAll('.status-btn').forEach(btn => {
+    const btnStatus = Number(btn.dataset.status);
+    const isActive = btnStatus === status;
+    btn.classList.toggle('btn-primary', isActive);
+    btn.classList.toggle('btn-outline-secondary', !isActive);
+  });
+}
+
+function createDispatchCard(unit, info) {
+  const card = document.createElement('div');
+  card.className = 'card status-card dispatch-card';
+  card.dataset.unit = unit;
+  card.innerHTML = `
+    <div class="card-header d-flex justify-content-between align-items-start">
+      <div>
+        <h5 class="card-title mb-0">${unit}</h5>
+        <small class="text-muted"></small>
+      </div>
+      <span class="availability badge rounded-pill"></span>
+    </div>
+    <div class="card-body">
+      <p class="current-status mb-3">
+        <span class="badge bg-primary"></span>
+      </p>
+      <div class="dispatch-meta mb-3">
+        <span class="meta-label">Ort</span>
+        <span class="meta-value dispatch-location"></span>
+      </div>
+      <div class="dispatch-meta mb-3">
+        <span class="meta-label">Stichwort</span>
+        <span class="meta-value dispatch-note"></span>
+      </div>
+      <div class="dispatch-meta mb-3">
+        <span class="meta-label">Priorität</span>
+        <span class="meta-value dispatch-priority"></span>
+      </div>
+      <div class="dispatch-meta mb-4">
+        <span class="meta-label">Alarmiert</span>
+        <span class="meta-value dispatch-alarm" data-raw=""></span>
+      </div>
+      <div class="d-flex status-buttons"></div>
+    </div>
+  `;
+  const buttonsContainer = card.querySelector('.status-buttons');
+  statusShortcuts.forEach(code => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-sm status-btn btn-outline-secondary';
+    button.dataset.status = String(code);
+    button.title = getStatusLabel(code);
+    button.textContent = code;
+    buttonsContainer.appendChild(button);
+  });
+  buttonsContainer.addEventListener('click', event => {
+    const button = event.target.closest('.status-btn');
+    if (!button || button.disabled) return;
+    const targetStatus = Number(button.dataset.status);
+    const buttons = Array.from(buttonsContainer.querySelectorAll('.status-btn'));
+    buttons.forEach(btn => (btn.disabled = true));
+    sendQuickStatus(unit, targetStatus)
+      .catch(err => {
+        showStatusError(err.message || 'Status konnte nicht gesetzt werden.');
+      })
+      .finally(() => {
+        if (!document.body.contains(buttonsContainer)) return;
+        buttons.forEach(btn => (btn.disabled = false));
+      });
+  });
+  updateDispatchCard(card, info);
+  return card;
+}
+
+function renderVehicleBoard() {
+  if (!statusBoard) return;
+  const units = Object.keys(vehiclesData).sort((a, b) => a.localeCompare(b, 'de-DE', { numeric: true }));
+  statusBoard.innerHTML = '';
+  units.forEach(unit => {
+    const info = vehiclesData[unit];
+    if (!info) return;
+    const card = createDispatchCard(unit, info);
+    statusBoard.appendChild(card);
+  });
+}
+
+async function refreshVehicles() {
+  try {
+    const response = await fetch('/api/status', {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-store'
+      }
+    });
+    if (!response.ok) throw new Error('Fahrzeugdaten konnten nicht geladen werden.');
+    const data = await response.json();
+    updateVehiclesState(data);
+    updateAvailabilityData();
+    renderVehicleBoard();
+    refreshUnitSelect();
+    updateStatusSelect();
+    hideStatusError();
+  } catch (err) {
+    showStatusError(err.message || 'Fahrzeugdaten konnten nicht geladen werden.');
+    throw err;
+  }
+}
+
+async function sendQuickStatus(unit, status) {
+  hideStatusError();
+  const response = await fetch('/api/dispatch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ unit, status })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) {
+    throw new Error('Status konnte nicht gesetzt werden.');
+  }
+  await refreshVehicles();
+}
+
+renderVehicleBoard();
+updateAvailabilityData();
+refreshUnitSelect();
 function updateStatusSelect() {
     const unit = unitSelect.value;
     if (vehiclesData[unit]) {
@@ -170,7 +440,15 @@ form.addEventListener('submit', async (e) => {
             body: JSON.stringify(payload)
         });
         const data = await res.json();
-        document.getElementById('result').textContent = data.ok ? 'Gesendet' : 'Fehler';
+        const resultEl = document.getElementById('result');
+        resultEl.textContent = data.ok ? 'Gesendet' : 'Fehler';
+        if (data.ok) {
+            try {
+                await refreshVehicles();
+            } catch (err) {
+                console.error(err);
+            }
+        }
     } catch (err) {
         document.getElementById('result').textContent = 'Fehler';
     }
@@ -278,6 +556,11 @@ document.getElementById('incident-save').addEventListener('click', async () => {
     if (r.ok) {
       success = true;
       incidentModal.hide();
+      try {
+        await refreshVehicles();
+      } catch (err) {
+        console.error(err);
+      }
     }
   } catch (err) {
     console.error(err);
@@ -352,6 +635,11 @@ document.getElementById('incident-alert').addEventListener('click', async () => 
     }
     success = true;
     incidentModal.hide();
+    try {
+      await refreshVehicles();
+    } catch (err) {
+      console.error(err);
+    }
   } catch (err) {
     console.error(err);
     let message = 'Alarmierung fehlgeschlagen. Bitte erneut versuchen.';
@@ -393,6 +681,13 @@ document.querySelectorAll('#incident-list .end').forEach(btn => {
     try {
       const res = await fetch(`/api/incidents/${id}/end`, {method: 'POST'});
       const r = await res.json();
+      if (r.ok) {
+        try {
+          await refreshVehicles();
+        } catch (err) {
+          console.error(err);
+        }
+      }
       resumeAutoReload(r.ok, { clearPending: !r.ok });
     } catch (err) {
       console.error(err);

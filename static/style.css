@@ -84,3 +84,46 @@ tr.status-9 .status-color {
 .status-card .status-buttons .status-btn {
   flex: 1 1 48px;
 }
+
+.dispatch-card {
+  min-width: 0;
+  background-color: #1f1f1f;
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dispatch-card .card-header {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.dispatch-card .card-header small {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.dispatch-card .availability {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.dispatch-card .dispatch-meta {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.dispatch-card .meta-label {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.dispatch-card .meta-value {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.dispatch-card.active-incident {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
