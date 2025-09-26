@@ -106,10 +106,9 @@
             <label class="form-label" for="incident-priority">Priorität</label>
             <select name="priority" id="incident-priority" class="form-select">
               <option value="">--</option>
-              <option value="R0">R0</option>
-              <option value="R1">R1</option>
-              <option value="R2">R2</option>
-              <option value="R3">R3</option>
+              {% for prio in priority_options %}
+              <option value="{{ prio }}">{{ prio }}</option>
+              {% endfor %}
             </select>
           </div>
           <div class="mb-3">

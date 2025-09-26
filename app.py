@@ -25,6 +25,7 @@ app.logger.setLevel(logging.INFO)
 DATA_FILE = Path('data/vehicles.json')
 INCIDENT_FILE = Path('data/incidents.json')
 TEMPLATE_FILE = Path('data/templates.json')
+PRIORITY_FILE = Path('data/priorities.json')
 DEFAULT_VEHICLES = {
     'RTW1': {
         'name': 'Rettungswagen 1',
@@ -196,6 +197,8 @@ DEFAULT_TEMPLATES = [
     },
 ]
 
+DEFAULT_PRIORITIES = ['R0', 'R1', 'R2', 'R3']
+
 
 def load_templates():
     if TEMPLATE_FILE.exists():
@@ -211,9 +214,51 @@ def save_templates():
     notify_change()
 
 
+def load_priorities():
+    if PRIORITY_FILE.exists():
+        with open(PRIORITY_FILE, encoding='utf-8') as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                cleaned = []
+                seen = set()
+                for item in data:
+                    if item is None:
+                        continue
+                    value = str(item).strip()
+                    if not value or value in seen:
+                        continue
+                    cleaned.append(value)
+                    seen.add(value)
+                return cleaned
+            elif isinstance(data, dict):
+                # Support legacy dict-based storage where priorities
+                # were stored as mapping keys or under a 'priorities' field.
+                items = data.get('priorities') if 'priorities' in data else data.keys()
+                cleaned = []
+                seen = set()
+                for item in items:
+                    if item is None:
+                        continue
+                    value = str(item).strip()
+                    if not value or value in seen:
+                        continue
+                    cleaned.append(value)
+                    seen.add(value)
+                return cleaned
+    return DEFAULT_PRIORITIES.copy()
+
+
+def save_priorities():
+    PRIORITY_FILE.parent.mkdir(exist_ok=True)
+    with open(PRIORITY_FILE, 'w', encoding='utf-8') as f:
+        json.dump(priorities, f, ensure_ascii=False, indent=2)
+    notify_change()
+
+
 vehicles = load_vehicles()
 incidents = load_incidents()
 templates = load_templates()
+priorities = load_priorities()
 
 listeners = []
 
@@ -277,6 +322,12 @@ def dispatch():
             inc.get('active') and name in inc.get('vehicles', []) for inc in incidents
         )
     }
+    priority_options = list(priorities)
+    for source in (incidents, templates):
+        for entry in source:
+            value = entry.get('priority') if isinstance(entry, dict) else None
+            if value and value not in priority_options:
+                priority_options.append(value)
     return render_template(
         'dispatch.html',
         title='Leitstelle',
@@ -285,6 +336,8 @@ def dispatch():
         status_text=STATUS_TEXT,
         incidents=sorted_incidents,
         templates=templates,
+        priorities=priorities,
+        priority_options=priority_options,
     )
 
 
@@ -501,6 +554,37 @@ def api_delete_template(tid):
             save_templates()
             return jsonify({'ok': True})
     return jsonify({'ok': False}), 404
+
+
+def _normalise_priorities(items):
+    cleaned = []
+    seen = set()
+    for item in items:
+        if item is None:
+            continue
+        value = str(item).strip()
+        if not value or value in seen:
+            continue
+        cleaned.append(value)
+        seen.add(value)
+    return cleaned
+
+
+@app.route('/api/priorities', methods=['GET'])
+def api_list_priorities():
+    return jsonify(priorities)
+
+
+@app.route('/api/priorities', methods=['POST'])
+def api_save_priorities():
+    data = request.json or {}
+    items = data.get('priorities')
+    if not isinstance(items, list):
+        return jsonify({'ok': False, 'error': 'invalid'}), 400
+    cleaned = _normalise_priorities(items)
+    priorities[:] = cleaned
+    save_priorities()
+    return jsonify({'ok': True, 'priorities': priorities})
 
 
 @app.route('/api/incidents', methods=['POST'])
@@ -721,7 +805,13 @@ def api_update_incident(inc_id):
 
 @app.route('/settings')
 def settings():
-    return render_template('settings.html', title='Einstellungen', vehicles=vehicles, templates=templates)
+    return render_template(
+        'settings.html',
+        title='Einstellungen',
+        vehicles=vehicles,
+        templates=templates,
+        priorities=priorities,
+    )
 
 
 @app.route('/download-log')
