@@ -3,6 +3,16 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
   html, body { overflow: hidden; }
+  .vehicle-label {
+    background: rgba(0, 0, 0, 0.8);
+    color: #f8f9fa;
+    border-radius: 4px;
+    padding: 2px 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    text-transform: uppercase;
+  }
 </style>
 {% endblock %}
 {% block container_class %}container-fluid p-0 vh-100 d-flex flex-column{% endblock %}
@@ -232,8 +242,12 @@ function triggerAlarm(unit, info, alarmId) {
         if (vehicleMarkers[unit]) {
             vehicleMarkers[unit].setLatLng([info.lat, info.lon]);
             vehicleMarkers[unit].setIcon(getIcon(unit));
+            vehicleMarkers[unit].setTooltipContent(displayCallsign);
         } else {
-            vehicleMarkers[unit] = L.marker([info.lat, info.lon], {icon: getIcon(unit)}).addTo(map).bindPopup(displayCallsign);
+            const marker = L.marker([info.lat, info.lon], {icon: getIcon(unit)}).addTo(map);
+            marker.bindPopup(displayCallsign);
+            marker.bindTooltip(displayCallsign, { permanent: true, direction: 'top', offset: [0, -12], className: 'vehicle-label' });
+            vehicleMarkers[unit] = marker;
         }
     }
     fitMapToAll();
@@ -303,8 +317,13 @@ async function refresh() {
                 if (vehicleMarkers[unit]) {
                     vehicleMarkers[unit].setLatLng([info.lat, info.lon]);
                     vehicleMarkers[unit].setIcon(getIcon(unit));
+                    vehicleMarkers[unit].setTooltipContent(info.callsign || unit);
                 } else {
-                    vehicleMarkers[unit] = L.marker([info.lat, info.lon], {icon: getIcon(unit)}).addTo(map).bindPopup(info.callsign || unit);
+                    const marker = L.marker([info.lat, info.lon], {icon: getIcon(unit)}).addTo(map);
+                    const displayCallsign = info.callsign || unit;
+                    marker.bindPopup(displayCallsign);
+                    marker.bindTooltip(displayCallsign, { permanent: true, direction: 'top', offset: [0, -12], className: 'vehicle-label' });
+                    vehicleMarkers[unit] = marker;
                 }
             } else if (vehicleMarkers[unit]) {
                 map.removeLayer(vehicleMarkers[unit]);
