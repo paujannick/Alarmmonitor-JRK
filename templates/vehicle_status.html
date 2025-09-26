@@ -72,7 +72,12 @@ async function sendStatus(unit, status, card) {
 
 async function refreshStatus() {
   try {
-    const response = await fetch('/api/status');
+    const response = await fetch('/api/status', {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-store'
+      }
+    });
     if (!response.ok) throw new Error('Konnte Fahrzeugdaten nicht laden');
     const data = await response.json();
     document.querySelectorAll('.status-card').forEach(card => {
@@ -104,6 +109,49 @@ function setupHandlers() {
 
 setupHandlers();
 refreshStatus();
-setInterval(refreshStatus, 5000);
+
+let eventSource = null;
+let reconnectTimer = null;
+
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connectEventStream();
+  }, 5000);
+}
+
+function connectEventStream() {
+  if (eventSource) {
+    eventSource.close();
+  }
+  eventSource = new EventSource('/events');
+  eventSource.onopen = () => {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    refreshStatus();
+  };
+  eventSource.onmessage = () => {
+    refreshStatus();
+  };
+  eventSource.onerror = () => {
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+    scheduleReconnect();
+  };
+}
+
+window.addEventListener('beforeunload', () => {
+  if (eventSource) {
+    eventSource.close();
+  }
+});
+
+connectEventStream();
+setInterval(refreshStatus, 30000);
 </script>
 {% endblock %}
