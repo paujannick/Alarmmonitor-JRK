@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block container_class %}container-fluid{% endblock %}
+{% block content %}
+<h1 class="mb-4">Fahrzeugstatus</h1>
+<div id="vehicle-status-board" class="status-grid">
+  {% for name, info in vehicles.items() %}
+  <div class="card status-card" data-unit="{{ name }}">
+    <div class="card-header">
+      <h5 class="card-title mb-0">{{ name }}</h5>
+      <small class="text-muted">{{ info.callsign or info.name }}</small>
+    </div>
+    <div class="card-body">
+      <p class="current-status mb-3">
+        <span class="badge bg-primary">Status {{ info.status }} – {{ status_text[info.status] }}</span>
+      </p>
+      <div class="d-flex status-buttons">
+        {% for code, text in status_text.items() %}
+        <button type="button" class="btn btn-sm status-btn {% if code == info.status %}btn-primary{% else %}btn-outline-secondary{% endif %}" data-status="{{ code }}" title="{{ code }} - {{ text }}">
+          {{ code }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+<div class="alert alert-danger d-none mt-3" role="alert" id="status-error"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+const statusText = {{ status_text|tojson }};
+const statusError = document.getElementById('status-error');
+
+function getStatusLabel(status) {
+  return `Status ${status} – ${statusText[String(status)] || ''}`;
+}
+
+function updateCard(card, info) {
+  const status = Number(info.status);
+  const badge = card.querySelector('.current-status .badge');
+  badge.textContent = getStatusLabel(status);
+  card.querySelectorAll('.status-btn').forEach(btn => {
+    const btnStatus = Number(btn.dataset.status);
+    const isActive = btnStatus === status;
+    btn.classList.toggle('btn-primary', isActive);
+    btn.classList.toggle('btn-outline-secondary', !isActive);
+    btn.disabled = false;
+  });
+}
+
+async function sendStatus(unit, status, card) {
+  try {
+    statusError.classList.add('d-none');
+    const response = await fetch('/api/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unit, status })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error('Status konnte nicht gesetzt werden');
+    }
+    await refreshStatus();
+  } catch (err) {
+    statusError.textContent = err.message || 'Status konnte nicht gesetzt werden';
+    statusError.classList.remove('d-none');
+    if (card) {
+      card.querySelectorAll('.status-btn').forEach(btn => btn.disabled = false);
+    }
+  }
+}
+
+async function refreshStatus() {
+  try {
+    const response = await fetch('/api/status');
+    if (!response.ok) throw new Error('Konnte Fahrzeugdaten nicht laden');
+    const data = await response.json();
+    document.querySelectorAll('.status-card').forEach(card => {
+      const unit = card.dataset.unit;
+      if (data[unit]) {
+        updateCard(card, data[unit]);
+      }
+    });
+    statusError.classList.add('d-none');
+    statusError.textContent = '';
+  } catch (err) {
+    statusError.textContent = err.message || 'Konnte Fahrzeugdaten nicht laden';
+    statusError.classList.remove('d-none');
+  }
+}
+
+function setupHandlers() {
+  document.querySelectorAll('.status-card').forEach(card => {
+    card.addEventListener('click', event => {
+      const button = event.target.closest('.status-btn');
+      if (!button || button.disabled) return;
+      const unit = card.dataset.unit;
+      const status = Number(button.dataset.status);
+      card.querySelectorAll('.status-btn').forEach(btn => btn.disabled = true);
+      sendStatus(unit, status, card);
+    });
+  });
+}
+
+setupHandlers();
+refreshStatus();
+setInterval(refreshStatus, 5000);
+</script>
+{% endblock %}
