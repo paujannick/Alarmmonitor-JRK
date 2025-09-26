@@ -401,14 +401,39 @@ async function refresh() {
         const data = await statusRes.json();
         const incs = await incidentsRes.json();
         setConnectionStatus(true);
+        const tbody = vehicleTableEl ? vehicleTableEl.tBodies[0] : null;
+        const existingRows = new Map();
+        if (tbody) {
+            for (const row of Array.from(tbody.rows)) {
+                if (row.dataset && row.dataset.unit) {
+                    existingRows.set(row.dataset.unit, row);
+                }
+            }
+        }
+        const fetchedUnits = new Set(Object.keys(data));
+
         for (const [unit, info] of Object.entries(data)) {
-        vehicleData[unit] = info;
-        const row = document.querySelector(`tr[data-unit="${unit}"]`);
-        if (row) {
+            vehicleData[unit] = info;
+            let row = existingRows.get(unit);
+            if (!row && tbody) {
+                row = document.createElement('tr');
+                row.dataset.unit = unit;
+                row.innerHTML = `
+                    <td class="unit-cell"></td>
+                    <td class="icon-cell"></td>
+                    <td class="status-text"></td>
+                    <td class="note"></td>
+                    <td class="location"></td>
+                    <td class="status-color-cell"><span class="status-color"></span></td>
+                `;
+                tbody.appendChild(row);
+            }
+            if (!row) continue;
             row.className = `status-${info.status}`;
-            row.querySelector('.status-text').textContent = `${info.status} - ${statusText[info.status]}`;
-            row.querySelector('.note').textContent = info.note;
-            row.querySelector('.location').textContent = info.location;
+            const statusLabel = statusText[info.status] || '';
+            row.querySelector('.status-text').textContent = `${info.status} - ${statusLabel}`.trim();
+            row.querySelector('.note').textContent = info.note || '';
+            row.querySelector('.location').textContent = info.location || '';
             row.querySelector('.unit-cell').innerHTML = `<strong>${info.name}</strong><br><small>${info.callsign}</small>`;
             const iconCell = row.querySelector('.icon-cell');
             if (info.icon) {
@@ -446,22 +471,46 @@ async function refresh() {
                 delete vehicleMarkers[unit];
             }
         }
-    }
-    for (const inc of incs) {
-        const loc = inc.location || {};
-        if (inc.active && loc.lat && loc.lon) {
-            if (incidentMarkers[inc.id]) {
-                incidentMarkers[inc.id].setLatLng([loc.lat, loc.lon]);
-            } else {
-                incidentMarkers[inc.id] = L.marker([loc.lat, loc.lon], {icon: incidentIcon})
-                    .addTo(map)
-                    .bindPopup(`${inc.keyword} - ${loc.name}`);
+
+        if (tbody) {
+            for (const [unit, row] of existingRows.entries()) {
+                if (!fetchedUnits.has(unit)) {
+                    row.remove();
+                }
             }
-        } else if (incidentMarkers[inc.id]) {
-            map.removeLayer(incidentMarkers[inc.id]);
-            delete incidentMarkers[inc.id];
         }
-    }
+
+        for (const unit of Object.keys(vehicleData)) {
+            if (!fetchedUnits.has(unit)) {
+                delete vehicleData[unit];
+                delete lastAlarmIds[unit];
+                delete vehicleIcons[unit];
+                if (vehicleMarkers[unit]) {
+                    map.removeLayer(vehicleMarkers[unit]);
+                    delete vehicleMarkers[unit];
+                }
+                if (lastAlarmUnit === unit) {
+                    setLatestIncidentVisible(false);
+                    lastAlarmUnit = null;
+                    lastAlarmId = null;
+                }
+            }
+        }
+        for (const inc of incs) {
+            const loc = inc.location || {};
+            if (inc.active && loc.lat && loc.lon) {
+                if (incidentMarkers[inc.id]) {
+                    incidentMarkers[inc.id].setLatLng([loc.lat, loc.lon]);
+                } else {
+                    incidentMarkers[inc.id] = L.marker([loc.lat, loc.lon], {icon: incidentIcon})
+                        .addTo(map)
+                        .bindPopup(`${inc.keyword} - ${loc.name}`);
+                }
+            } else if (incidentMarkers[inc.id]) {
+                map.removeLayer(incidentMarkers[inc.id]);
+                delete incidentMarkers[inc.id];
+            }
+        }
     adjustVehicleTableSize();
     fitMapToAll();
     } catch (err) {
