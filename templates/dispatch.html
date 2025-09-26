@@ -131,6 +131,7 @@
             <textarea name="note" id="incident-note" class="form-control" rows="3"></textarea>
           </div>
         </form>
+        <div class="alert alert-danger d-none" role="alert" id="incident-error"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
@@ -177,6 +178,13 @@ form.addEventListener('submit', async (e) => {
 });
 
 const incidentModal = new bootstrap.Modal(document.getElementById('incident-modal'));
+const incidentError = document.getElementById('incident-error');
+const incidentModalEl = document.getElementById('incident-modal');
+incidentModalEl.addEventListener('show.bs.modal', () => {
+  incidentError.classList.add('d-none');
+  incidentError.textContent = '';
+});
+
 function fillIncidentModal(inc) {
   const f = document.getElementById('incident-form');
   f.reset();
@@ -244,6 +252,7 @@ document.getElementById('incident-save').addEventListener('click', async () => {
 // This creates or updates the incident and then alerts all selected vehicles
 document.getElementById('incident-alert').addEventListener('click', async () => {
   const f = document.getElementById('incident-form');
+  const alertBtn = document.getElementById('incident-alert');
   let id = f.elements['id'].value; // Existing incident id (empty when creating)
   const units = Array.from(f.querySelectorAll('input[name="vehicles"]:checked')).map(cb => cb.value);
 
@@ -258,13 +267,28 @@ document.getElementById('incident-alert').addEventListener('click', async () => 
   const note = f.note.value.trim();
   if (note) details.note = note;
 
+  if (!units.length) {
+    incidentError.textContent = 'Bitte mindestens ein Fahrzeug auswählen.';
+    incidentError.classList.remove('d-none');
+    return;
+  }
+
   // Update an existing incident or create a new one if no id is present
+  incidentError.classList.add('d-none');
+  incidentError.textContent = '';
+  alertBtn.disabled = true;
   if (id) {
-    await fetch(`/api/incidents/${id}`, {
+    const updateRes = await fetch(`/api/incidents/${id}`, {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(details)
     });
+    if (!updateRes.ok) {
+      incidentError.textContent = 'Einsatz konnte nicht aktualisiert werden.';
+      incidentError.classList.remove('d-none');
+      alertBtn.disabled = false;
+      return;
+    }
   } else {
     const res = await fetch('/api/incidents', {
       method: 'POST',
@@ -272,22 +296,34 @@ document.getElementById('incident-alert').addEventListener('click', async () => 
       body: JSON.stringify(details)
     });
     const r = await res.json();
-    if (!r.ok) return; // Abort if incident creation failed
+    if (!res.ok || !r.ok) {
+      incidentError.textContent = 'Einsatz konnte nicht angelegt werden.';
+      incidentError.classList.remove('d-none');
+      alertBtn.disabled = false;
+      return;
+    }
     id = r.id;
   }
 
   // Collect selected vehicles and alert them
-  if (units.length) {
-    await fetch(`/api/incidents/${id}/alert`, {
+  try {
+    const alertRes = await fetch(`/api/incidents/${id}/alert`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({units})
     });
+    const alertData = await alertRes.json();
+    if (!alertRes.ok || !alertData.ok) {
+      throw new Error('Alarmierung fehlgeschlagen');
+    }
+    incidentModal.hide();
+    window.location.reload();
+  } catch (err) {
+    console.error(err);
+    incidentError.textContent = 'Alarmierung fehlgeschlagen. Bitte erneut versuchen.';
+    incidentError.classList.remove('d-none');
+    alertBtn.disabled = false;
   }
-
-  // Close the modal and refresh the page to display updated data
-  incidentModal.hide();
-  window.location.reload();
 });
 
 const templateList = {{ templates|tojson }};
