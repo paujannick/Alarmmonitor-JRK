@@ -185,6 +185,37 @@ incidentModalEl.addEventListener('show.bs.modal', () => {
   incidentError.textContent = '';
 });
 
+let autoReloadPauseCount = 0;
+let reloadPending = false;
+
+function pauseAutoReload() {
+  autoReloadPauseCount += 1;
+}
+
+function resumeAutoReload(triggerReload = false, options = {}) {
+  const { clearPending = false } = options;
+  if (autoReloadPauseCount > 0) {
+    autoReloadPauseCount -= 1;
+  }
+  if (autoReloadPauseCount > 0) {
+    if (triggerReload) reloadPending = true;
+    return;
+  }
+  if (triggerReload) {
+    reloadPending = false;
+    window.location.reload();
+    return;
+  }
+  if (clearPending) {
+    reloadPending = false;
+    return;
+  }
+  if (reloadPending) {
+    reloadPending = false;
+    window.location.reload();
+  }
+}
+
 function fillIncidentModal(inc) {
   const f = document.getElementById('incident-form');
   f.reset();
@@ -236,15 +267,23 @@ document.getElementById('incident-save').addEventListener('click', async () => {
   if (note) payload.note = note;
   const url = id ? `/api/incidents/${id}` : '/api/incidents';
   const method = id ? 'PUT' : 'POST';
-  const res = await fetch(url, {
-    method,
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(payload)
-  });
-  const r = await res.json();
-  if (r.ok) {
-    incidentModal.hide();
-    window.location.reload();
+  pauseAutoReload();
+  let success = false;
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const r = await res.json();
+    if (r.ok) {
+      success = true;
+      incidentModal.hide();
+    }
+  } catch (err) {
+    console.error(err);
+  } finally {
+    resumeAutoReload(success, { clearPending: !success });
   }
 });
 
@@ -277,51 +316,61 @@ document.getElementById('incident-alert').addEventListener('click', async () => 
   incidentError.classList.add('d-none');
   incidentError.textContent = '';
   alertBtn.disabled = true;
-  if (id) {
-    const updateRes = await fetch(`/api/incidents/${id}`, {
-      method: 'PUT',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(details)
-    });
-    if (!updateRes.ok) {
-      incidentError.textContent = 'Einsatz konnte nicht aktualisiert werden.';
-      incidentError.classList.remove('d-none');
-      alertBtn.disabled = false;
-      return;
-    }
-  } else {
-    const res = await fetch('/api/incidents', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(details)
-    });
-    const r = await res.json();
-    if (!res.ok || !r.ok) {
-      incidentError.textContent = 'Einsatz konnte nicht angelegt werden.';
-      incidentError.classList.remove('d-none');
-      alertBtn.disabled = false;
-      return;
-    }
-    id = r.id;
-  }
-
-  // Collect selected vehicles and alert them
+  pauseAutoReload();
+  let success = false;
   try {
+    if (id) {
+      const updateRes = await fetch(`/api/incidents/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(details)
+      });
+      if (!updateRes.ok) {
+        throw new Error('update');
+      }
+    } else {
+      const res = await fetch('/api/incidents', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(details)
+      });
+      const r = await res.json().catch(() => ({}));
+      if (!res.ok || !r.ok) {
+        throw new Error('create');
+      }
+      id = r.id;
+      f.elements['id'].value = id;
+    }
+
     const alertRes = await fetch(`/api/incidents/${id}/alert`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({units})
     });
-    const alertData = await alertRes.json();
+    const alertData = await alertRes.json().catch(() => ({}));
     if (!alertRes.ok || !alertData.ok) {
-      throw new Error('Alarmierung fehlgeschlagen');
+      throw new Error('alert');
     }
+    success = true;
     incidentModal.hide();
-    window.location.reload();
   } catch (err) {
     console.error(err);
-    incidentError.textContent = 'Alarmierung fehlgeschlagen. Bitte erneut versuchen.';
+    let message = 'Alarmierung fehlgeschlagen. Bitte erneut versuchen.';
+    if (err instanceof Error) {
+      if (err.message === 'update') {
+        message = 'Einsatz konnte nicht aktualisiert werden.';
+      } else if (err.message === 'create') {
+        message = 'Einsatz konnte nicht angelegt werden.';
+      }
+    }
+    incidentError.textContent = message;
     incidentError.classList.remove('d-none');
+    alertBtn.disabled = false;
+  } finally {
+    resumeAutoReload(success, { clearPending: !success });
+  }
+  if (success) {
+    // ensure the button is re-enabled for future interactions after reload
     alertBtn.disabled = false;
   }
 });
@@ -341,10 +390,14 @@ document.querySelectorAll('#incident-list .end').forEach(btn => {
   btn.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
     const id = tr.dataset.id;
-    const res = await fetch(`/api/incidents/${id}/end`, {method: 'POST'});
-    const r = await res.json();
-    if (r.ok) {
-      location.reload();
+    pauseAutoReload();
+    try {
+      const res = await fetch(`/api/incidents/${id}/end`, {method: 'POST'});
+      const r = await res.json();
+      resumeAutoReload(r.ok, { clearPending: !r.ok });
+    } catch (err) {
+      console.error(err);
+      resumeAutoReload(false, { clearPending: true });
     }
   });
 });
@@ -353,15 +406,25 @@ document.querySelectorAll('#incident-list .delete').forEach(btn => {
   btn.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
     const id = tr.dataset.id;
-    const res = await fetch(`/api/incidents/${id}`, {method: 'DELETE'});
-    const r = await res.json();
-    if (r.ok) {
-      location.reload();
+    pauseAutoReload();
+    try {
+      const res = await fetch(`/api/incidents/${id}`, {method: 'DELETE'});
+      const r = await res.json();
+      resumeAutoReload(r.ok, { clearPending: !r.ok });
+    } catch (err) {
+      console.error(err);
+      resumeAutoReload(false, { clearPending: true });
     }
   });
 });
 
 const evtSource = new EventSource('/events');
-evtSource.onmessage = () => window.location.reload();
+evtSource.onmessage = () => {
+  if (autoReloadPauseCount > 0) {
+    reloadPending = true;
+    return;
+  }
+  window.location.reload();
+};
 </script>
 {% endblock %}
