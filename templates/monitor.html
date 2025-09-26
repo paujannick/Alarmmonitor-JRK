@@ -45,13 +45,6 @@
         </tbody>
       </table>
     </div>
-    <div id="crew-table-container" class="overflow-hidden mt-3">
-      <h2>Besatzung</h2>
-      <table class="table table-dark table-striped table-sm" id="crew-table">
-        <thead><tr><th>Fahrzeug</th><th>Name</th><th>Position</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
   </div>
 </div>
 <audio id="alarm" preload="auto">
@@ -79,7 +72,6 @@ const latestDiv = document.getElementById('latest-incident');
 const enableBtn = document.getElementById('enable-audio');
 const fullscreenBtn = document.getElementById('fullscreen');
 const datetimeEl = document.getElementById('datetime');
-const crewTableBody = document.querySelector('#crew-table tbody');
 let audioUnlocked = false;
 const ttsEl = new Audio();
 let lastAlarmId = null;
@@ -198,29 +190,6 @@ function speak(text) {
     });
 }
 
-function renderAllCrew() {
-    crewTableBody.innerHTML = '';
-    for (const [unit, info] of Object.entries(vehicleData)) {
-        (info.crew || []).forEach(member => {
-            let name = '';
-            let position = '';
-            if (typeof member === 'string') {
-                const parts = member.split(':');
-                name = parts[0].trim();
-                position = (parts[1] || '').trim();
-            } else if (member) {
-                name = member.name || '';
-                position = member.position || '';
-            }
-            if (name) {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${unit}</td><td>${name}</td><td>${position}</td>`;
-                crewTableBody.appendChild(tr);
-            }
-        });
-    }
-}
-
 function triggerAlarm(unit, info, alarmId) {
     alarmId = alarmId || computeAlarmId(unit, info);
     if (alarmId === lastAlarmId) return;
@@ -282,11 +251,15 @@ async function refresh() {
     refreshing = true;
     try {
         const [statusRes, incidentsRes] = await Promise.all([
-            fetch('/api/status'),
-            fetch('/api/incidents')
+            fetch('/api/status', {cache: 'no-store'}),
+            fetch('/api/incidents', {cache: 'no-store'})
         ]);
+        if (!statusRes.ok || !incidentsRes.ok) {
+            throw new Error('Netzwerkfehler');
+        }
         const data = await statusRes.json();
         const incs = await incidentsRes.json();
+        setConnectionStatus(true);
         for (const [unit, info] of Object.entries(data)) {
         vehicleData[unit] = info;
         const row = document.querySelector(`tr[data-unit="${unit}"]`);
@@ -343,8 +316,10 @@ async function refresh() {
             delete incidentMarkers[inc.id];
         }
     }
-    renderAllCrew();
     fitMapToAll();
+    } catch (err) {
+        console.error('Aktualisierung fehlgeschlagen', err);
+        setConnectionStatus(false);
     } finally {
         refreshing = false;
         if (refreshQueued) {
@@ -353,9 +328,74 @@ async function refresh() {
         }
     }
 }
-const evtSource = new EventSource('/events');
-evtSource.onmessage = () => refresh();
-renderAllCrew();
+const connectionStatusEl = document.createElement('div');
+connectionStatusEl.id = 'connection-status';
+connectionStatusEl.className = 'badge bg-danger position-fixed top-0 end-0 m-3 fs-6';
+connectionStatusEl.textContent = 'Getrennt';
+connectionStatusEl.style.zIndex = '2000';
+document.body.appendChild(connectionStatusEl);
+
+function setConnectionStatus(connected) {
+    if (connected) {
+        connectionStatusEl.classList.remove('bg-danger');
+        connectionStatusEl.classList.add('bg-success');
+        connectionStatusEl.textContent = 'Verbunden';
+    } else {
+        connectionStatusEl.classList.remove('bg-success');
+        connectionStatusEl.classList.add('bg-danger');
+        connectionStatusEl.textContent = 'Verbindung getrennt';
+    }
+}
+
+let eventSource = null;
+let reconnectTimer = null;
+
+function scheduleReconnect() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connectEventStream();
+    }, 5000);
+}
+
+function connectEventStream() {
+    if (eventSource) {
+        eventSource.close();
+    }
+    eventSource = new EventSource('/events');
+    eventSource.onopen = () => {
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
+        setConnectionStatus(true);
+        refresh();
+    };
+    eventSource.onmessage = () => {
+        setConnectionStatus(true);
+        refresh();
+    };
+    eventSource.onerror = () => {
+        setConnectionStatus(false);
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
+        scheduleReconnect();
+    };
+}
+
+window.addEventListener('beforeunload', () => {
+    if (eventSource) {
+        eventSource.close();
+    }
+});
+
+setConnectionStatus(false);
+connectEventStream();
 refresh();
+setInterval(() => {
+    refresh();
+}, 30000);
 </script>
 {% endblock %}

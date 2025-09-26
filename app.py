@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 from urllib import parse, request as urlrequest
-from queue import Queue
+from queue import Queue, Empty
 import logging
 import functools
 
@@ -189,10 +189,17 @@ def event_stream():
     listeners.append(q)
     try:
         while True:
-            data = q.get()
+            try:
+                data = q.get(timeout=15)
+            except Empty:
+                yield ': keepalive\n\n'
+                continue
             yield f"data: {data}\n\n"
     finally:
-        listeners.remove(q)
+        try:
+            listeners.remove(q)
+        except ValueError:
+            pass
 
 
 @app.route('/events')
