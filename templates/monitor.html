@@ -197,12 +197,20 @@ function triggerAlarm(unit, info, alarmId) {
     lastAlarmUnit = unit;
     const displayCallsign = info.callsign || unit;
     const speechCallsign = info.tts || displayCallsign;
+    const priority = info.priority || '';
     const parts = [`Alarm für ${speechCallsign}`];
+    if (priority) parts.push(`Priorität ${priority}`);
     if (info.note) parts.push(info.note);
     if (info.location) parts.push(info.location);
     const speechText = parts.join('. ');
-    const displayText = `${info.note || ''} ${info.location || ''}`.trim();
-    alarmQueue.push({alarmId, displayCallsign, speechText, displayText});
+    const displayParts = [];
+    if (info.note) displayParts.push(info.note);
+    if (info.location) displayParts.push(info.location);
+    const displayText = displayParts.join(' ').trim();
+    const displayPriorityHtml = priority
+        ? `<span class="badge bg-warning text-dark ms-2 me-3">${priority}</span>`
+        : '';
+    alarmQueue.push({alarmId, displayCallsign, speechText, displayText, displayPriorityHtml});
     if (!alarmProcessing) {
         alarmProcessing = true;
         if (audioUnlocked) {
@@ -238,7 +246,10 @@ function processAlarmQueue() {
         lastAlarmId = null;
         return;
     }
-    latestDiv.innerHTML = `<strong>${item.displayCallsign}</strong> ${item.displayText}`;
+    const fragments = [`<strong>${item.displayCallsign}</strong>`];
+    if (item.displayPriorityHtml) fragments.push(item.displayPriorityHtml);
+    if (item.displayText) fragments.push(item.displayText);
+    latestDiv.innerHTML = fragments.join(' ').trim();
     latestDiv.style.display = 'block';
     speak(item.speechText).then(() => processAlarmQueue());
 }

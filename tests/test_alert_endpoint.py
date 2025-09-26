@@ -66,6 +66,21 @@ def test_vehicle_status_reset_after_incident_end():
     assert app.vehicles['RTW1']['status'] == 1
 
 
+def test_vehicle_priority_is_set_and_cleared():
+    app, client = setup_app()
+    resp = client.post(
+        '/api/incidents',
+        json={'keyword': 'Test', 'location': 'Loc', 'priority': 'R1'},
+    )
+    inc_id = resp.get_json()['id']
+
+    client.post(f'/api/incidents/{inc_id}/alert', json={'units': ['RTW1']})
+    assert app.vehicles['RTW1']['priority'] == 'R1'
+
+    client.post(f'/api/incidents/{inc_id}/end')
+    assert app.vehicles['RTW1']['priority'] == ''
+
+
 def test_vehicle_can_be_alerted_again_after_incident_end():
     app, client = setup_app()
     resp = client.post('/api/incidents', json={'keyword': 'A', 'location': 'LocA'})
