@@ -131,7 +131,10 @@ function adjustVehicleTableSize() {
     vehicleTableEl.style.fontSize = `${baseFontSize}px`;
     requestAnimationFrame(() => {
         const thead = vehicleTableEl.tHead;
-        const availableHeight = tableContainer.clientHeight;
+        const computed = window.getComputedStyle(tableContainer);
+        const paddingTop = parseFloat(computed.paddingTop) || 0;
+        const paddingBottom = parseFloat(computed.paddingBottom) || 0;
+        const availableHeight = Math.max(tableContainer.clientHeight - paddingTop - paddingBottom, 0);
         const headerHeight = thead ? thead.getBoundingClientRect().height : 0;
         const rows = Array.from(tbody.rows);
         const totalRowHeight = rows.reduce((sum, row) => sum + row.getBoundingClientRect().height, 0);
@@ -150,8 +153,9 @@ function adjustVehicleTableSize() {
         requestAnimationFrame(() => {
             const tableHeight = vehicleTableEl.getBoundingClientRect().height;
             const containerHeight = tableContainer.clientHeight;
-            if (tableHeight > containerHeight + 1 && scale > minScale) {
-                const adjustedScale = Math.max(minScale, scale * (containerHeight / tableHeight));
+            const usableHeight = Math.max(containerHeight - paddingTop - paddingBottom, 0);
+            if (tableHeight > usableHeight + 1 && scale > minScale) {
+                const adjustedScale = Math.max(minScale, scale * (usableHeight / tableHeight));
                 vehicleTableEl.style.fontSize = `${baseFontSize * adjustedScale}px`;
                 scale = adjustedScale;
             }
@@ -169,6 +173,7 @@ window.addEventListener('resize', resizeMap);
 window.addEventListener('load', resizeMap);
 document.addEventListener('DOMContentLoaded', () => {
     resizeMap();
+    updateAlertPadding();
     setTimeout(resizeMap, 200);
     adjustVehicleTableSize();
     setTimeout(adjustVehicleTableSize, 250);
@@ -351,14 +356,32 @@ function setLatestIncidentVisible(visible) {
     if (visible) {
         latestDiv.style.display = 'block';
         latestDiv.classList.add('visible');
+        updateAlertPadding();
         if (container) container.classList.add('has-alert');
-        requestAnimationFrame(adjustVehicleTableSize);
+        requestAnimationFrame(() => {
+            updateAlertPadding();
+            adjustVehicleTableSize();
+        });
     } else {
         latestDiv.style.display = 'none';
         latestDiv.classList.remove('visible');
         if (container) container.classList.remove('has-alert');
+        updateAlertPadding();
         requestAnimationFrame(adjustVehicleTableSize);
     }
+}
+
+function updateAlertPadding() {
+    if (!tableContainer) return;
+    const basePadding = 16; // 1rem
+    let topPadding = basePadding;
+    if (latestDiv && latestDiv.classList.contains('visible')) {
+        const alertHeight = latestDiv.getBoundingClientRect().height || 0;
+        const offsetTop = latestDiv.offsetTop || 0;
+        const gap = 16;
+        topPadding = Math.max(basePadding, offsetTop + alertHeight + gap);
+    }
+    tableContainer.style.setProperty('--monitor-table-top-padding', `${topPadding}px`);
 }
 
 async function refresh() {

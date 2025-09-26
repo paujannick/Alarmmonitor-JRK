@@ -115,15 +115,12 @@ body {
 }
 
 .monitor-table-body {
+  --monitor-table-top-padding: 1rem;
   flex: 1 1 auto;
   overflow: hidden;
-  padding: 1rem 1.5rem 1.5rem;
+  padding: var(--monitor-table-top-padding) 1.5rem 1.5rem;
   transition: padding-top 0.2s ease;
   position: relative;
-}
-
-.monitor-table.has-alert .monitor-table-body {
-  padding-top: 5.5rem;
 }
 
 .monitor-table table {
