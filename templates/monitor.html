@@ -268,8 +268,22 @@ function processAlarmQueue() {
     if (item.displayPriorityHtml) fragments.push(item.displayPriorityHtml);
     if (item.displayText) fragments.push(item.displayText);
     latestDiv.innerHTML = fragments.join(' ').trim();
-    latestDiv.style.display = 'block';
+    setLatestIncidentVisible(true);
     speak(item.speechText).then(() => processAlarmQueue());
+}
+
+function setLatestIncidentVisible(visible) {
+    if (!latestDiv) return;
+    const container = latestDiv.closest('.monitor-table');
+    if (visible) {
+        latestDiv.style.display = 'block';
+        latestDiv.classList.add('visible');
+        if (container) container.classList.add('has-alert');
+    } else {
+        latestDiv.style.display = 'none';
+        latestDiv.classList.remove('visible');
+        if (container) container.classList.remove('has-alert');
+    }
 }
 
 async function refresh() {
@@ -312,7 +326,7 @@ async function refresh() {
                 triggerAlarm(unit, info, alarmId);
             }
             if (lastAlarmUnit === unit && !hasAlertInfo) {
-                latestDiv.style.display = 'none';
+                setLatestIncidentVisible(false);
                 lastAlarmUnit = null;
                 lastAlarmId = null;
             }

@@ -214,6 +214,7 @@
         <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Schließen</button>
         <div class="d-flex gap-2">
           <button type="button" class="btn btn-secondary" id="incident-save">Speichern</button>
+          <button type="button" class="btn btn-success d-none" id="incident-end">Einsatz beenden</button>
           <button type="button" class="btn btn-danger" id="incident-alert">Alarmieren</button>
         </div>
       </div>
@@ -545,9 +546,13 @@ setupIncidentButtons(statusBoard);
 const incidentModal = new bootstrap.Modal(document.getElementById('incident-modal'));
 const incidentError = document.getElementById('incident-error');
 const incidentModalEl = document.getElementById('incident-modal');
+const incidentEndBtn = document.getElementById('incident-end');
 incidentModalEl.addEventListener('show.bs.modal', () => {
   incidentError.classList.add('d-none');
   incidentError.textContent = '';
+  if (incidentEndBtn) {
+    incidentEndBtn.disabled = false;
+  }
 });
 incidentModalEl.addEventListener('shown.bs.modal', () => {
   const focusTarget = incidentModalEl.querySelector('#incident-keyword');
@@ -623,6 +628,12 @@ function fillIncidentModal(inc) {
   const modalTitle = document.querySelector('#incident-modal .modal-title');
   if (modalTitle) {
     modalTitle.textContent = inc.id ? `Einsatz #${inc.id}` : 'Neuer Einsatz';
+  }
+  if (incidentEndBtn) {
+    const canEnd = Boolean(inc.id && inc.active);
+    incidentEndBtn.classList.toggle('d-none', !canEnd);
+    incidentEndBtn.dataset.incidentId = canEnd ? inc.id : '';
+    incidentEndBtn.disabled = !canEnd;
   }
 }
 async function fetchIncident(id) {
@@ -708,6 +719,41 @@ document.getElementById('incident-save').addEventListener('click', async () => {
     resumeAutoReload(success, { clearPending: !success });
   }
 });
+
+if (incidentEndBtn) {
+  incidentEndBtn.addEventListener('click', async () => {
+    const incidentId = Number(incidentEndBtn.dataset.incidentId || incidentEndBtn.dataset.incidentid);
+    if (!incidentId) {
+      return;
+    }
+    incidentError.classList.add('d-none');
+    incidentError.textContent = '';
+    incidentEndBtn.disabled = true;
+    pauseAutoReload();
+    let success = false;
+    try {
+      const response = await fetch(`/api/incidents/${incidentId}/end`, { method: 'POST' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) {
+        throw new Error('Einsatz konnte nicht beendet werden.');
+      }
+      success = true;
+      incidentModal.hide();
+      try {
+        await refreshVehicles();
+      } catch (err) {
+        console.error(err);
+      }
+    } catch (err) {
+      const message = err?.message || 'Einsatz konnte nicht beendet werden.';
+      incidentError.textContent = message;
+      incidentError.classList.remove('d-none');
+    } finally {
+      resumeAutoReload(success, { clearPending: !success });
+      incidentEndBtn.disabled = false;
+    }
+  });
+}
 
 // Handle the "Alarmieren" button inside the incident modal
 // This creates or updates the incident and then alerts all selected vehicles
