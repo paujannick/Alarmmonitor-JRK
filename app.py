@@ -141,7 +141,20 @@ def normalise_incident(incident):
     incident.setdefault('vehicles', [])
     incident.setdefault('notes', [])
     incident.setdefault('log', [])
-    incident.setdefault('active', True)
+
+    active = incident.get('active')
+    if isinstance(active, str):
+        active = active.strip().lower()
+        if active in {'false', '0', 'nein', 'no'}:
+            active = False
+        elif active in {'true', '1', 'ja', 'yes'}:
+            active = True
+        else:
+            active = None
+    if active is None:
+        active = not bool(incident.get('end'))
+    incident['active'] = bool(active)
+
     incident.setdefault('priority', '')
     incident.setdefault('patient', '')
     return incident

@@ -101,6 +101,31 @@ def test_vehicle_can_be_alerted_after_removed_from_incident():
     assert app.vehicles['RTW1']['status'] == 1
 
 
+def test_legacy_ended_incident_does_not_block_alert():
+    app, client = setup_app()
+    legacy = {
+        'id': 1,
+        'start': '2024-01-01T10:00:00',
+        'end': '2024-01-01T12:00:00',
+        'location': 'Altstadt',
+        'vehicles': ['RTW1'],
+        'keyword': 'Alt',
+        'notes': [],
+        'log': [],
+        # Legacy entries did not store an explicit "active" flag
+    }
+    app.incidents.append(app.normalise_incident(legacy))
+
+    resp = client.post('/api/incidents', json={'keyword': 'Neu', 'location': 'Neustadt'})
+    inc_id = resp.get_json()['id']
+
+    resp = client.post(f'/api/incidents/{inc_id}/alert', json={'units': ['RTW1']})
+    data = resp.get_json()
+    assert resp.status_code == 200
+    assert data['alerted'] == ['RTW1']
+    assert not data['skipped']
+
+
 def test_alert_handles_legacy_string_location():
     app, client = setup_app()
     app.incidents.append({
