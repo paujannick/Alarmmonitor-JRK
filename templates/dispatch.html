@@ -31,7 +31,13 @@
 
 <div class="alert alert-danger d-none" role="alert" id="dispatch-status-error"></div>
 
-<h2 class="mt-5">Fahrzeugübersicht</h2>
+<div class="vehicle-board-header mt-5 d-flex justify-content-between align-items-center">
+  <h2 class="mb-0">Fahrzeugübersicht</h2>
+  <button type="button" class="btn btn-outline-light btn-sm" id="vehicle-board-toggle" aria-expanded="true">
+    Übersicht einklappen
+  </button>
+</div>
+<div id="vehicle-board-container" class="vehicle-board-container">
 <div id="dispatch-vehicle-board" class="status-grid">
   {% for name, info in vehicles.items() %}
   <div class="card status-card dispatch-card" data-unit="{{ name }}">
@@ -62,6 +68,14 @@
         <span class="meta-label">Alarmiert</span>
         <span class="meta-value dispatch-alarm" data-raw="{{ info.alarm_time or '' }}">{{ info.alarm_time or '—' }}</span>
       </div>
+      <div class="mb-3">
+        <label class="form-label form-label-sm text-uppercase fw-semibold text-white-50" for="status-select-{{ loop.index }}">Status ändern</label>
+        <select class="form-select form-select-sm status-select" id="status-select-{{ loop.index }}" data-unit="{{ name }}">
+          {% for code, text in status_text|dictsort %}
+          <option value="{{ code }}" {% if code == info.status %}selected{% endif %}>{{ code }} – {{ text }}</option>
+          {% endfor %}
+        </select>
+      </div>
       <div class="d-flex status-buttons">
         {% for code in [0, 1, 2, 3, 4, 5, 6] %}
         <button type="button" class="btn btn-sm status-btn {% if code == info.status %}btn-primary{% else %}btn-outline-secondary{% endif %}" data-status="{{ code }}" title="Status {{ code }} – {{ status_text[code] }}">
@@ -72,6 +86,7 @@
     </div>
   </div>
   {% endfor %}
+</div>
 </div>
 
 <h2 class="mt-5 d-flex justify-content-between align-items-center">Einsätze <button class="btn btn-danger btn-sm" id="incident-new">Einsatz anlegen</button></h2>
@@ -198,6 +213,14 @@ const statusError = document.getElementById('dispatch-status-error');
 const unitSelect = form.querySelector('select[name="unit"]');
 const statusSelect = form.querySelector('select[name="status"]');
 const locationInput = form.querySelector('input[name="location"]');
+const boardContainer = document.getElementById('vehicle-board-container');
+const boardToggle = document.getElementById('vehicle-board-toggle');
+
+function normalizeStatusValue(value) {
+  if (value === null || value === undefined) return value;
+  const stringValue = String(value);
+  return /^\d+$/.test(stringValue) ? Number(stringValue) : stringValue;
+}
 
 function hideStatusError() {
   if (!statusError) return;
@@ -266,6 +289,10 @@ function updateDispatchCard(card, info) {
   if (statusBadge) {
     statusBadge.textContent = getStatusLabel(status);
   }
+  const statusSelectEl = card.querySelector('.status-select');
+  if (statusSelectEl) {
+    statusSelectEl.value = String(info.status);
+  }
   const availabilityBadge = card.querySelector('.availability');
   if (availabilityBadge) {
     const isAvailable = (status === 1 || status === 2) && !info.incident_id;
@@ -308,6 +335,10 @@ function createDispatchCard(unit, info) {
   const card = document.createElement('div');
   card.className = 'card status-card dispatch-card';
   card.dataset.unit = unit;
+  const statusOptions = Object.keys(statusText)
+    .sort((a, b) => a.localeCompare(b, 'de-DE', { numeric: true }))
+    .map(code => `<option value="${code}">${code} – ${statusText[code]}</option>`)
+    .join('');
   card.innerHTML = `
     <div class="card-header d-flex justify-content-between align-items-start">
       <div>
@@ -335,6 +366,12 @@ function createDispatchCard(unit, info) {
       <div class="dispatch-meta mb-4">
         <span class="meta-label">Alarmiert</span>
         <span class="meta-value dispatch-alarm" data-raw=""></span>
+      </div>
+      <div class="mb-3">
+        <label class="form-label form-label-sm text-uppercase fw-semibold text-white-50">Status ändern</label>
+        <select class="form-select form-select-sm status-select" data-unit="${unit}">
+          ${statusOptions}
+        </select>
       </div>
       <div class="d-flex status-buttons"></div>
     </div>
@@ -364,6 +401,8 @@ function createDispatchCard(unit, info) {
         buttons.forEach(btn => (btn.disabled = false));
       });
   });
+  const selectEl = card.querySelector('.status-select');
+  attachStatusSelect(selectEl, unit);
   updateDispatchCard(card, info);
   return card;
 }
@@ -393,6 +432,7 @@ async function refreshVehicles() {
     updateVehiclesState(data);
     updateAvailabilityData();
     renderVehicleBoard();
+    setupStatusSelects(statusBoard);
     refreshUnitSelect();
     updateStatusSelect();
     hideStatusError();
@@ -407,7 +447,7 @@ async function sendQuickStatus(unit, status) {
   const response = await fetch('/api/dispatch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ unit, status })
+    body: JSON.stringify({ unit, status: normalizeStatusValue(status) })
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.ok) {
@@ -416,9 +456,54 @@ async function sendQuickStatus(unit, status) {
   await refreshVehicles();
 }
 
+function attachStatusSelect(select, unit) {
+  if (!select) return;
+  if (select.dataset.hasHandler === 'true') return;
+  select.dataset.hasHandler = 'true';
+  select.addEventListener('change', async event => {
+    const target = event.target;
+    const newStatus = target.value;
+    const previous = vehiclesData[unit] ? String(vehiclesData[unit].status) : '';
+    target.disabled = true;
+    try {
+      await sendQuickStatus(unit, newStatus);
+    } catch (err) {
+      showStatusError(err.message || 'Status konnte nicht gesetzt werden.');
+      target.value = previous;
+    } finally {
+      target.disabled = false;
+    }
+  });
+}
+
+function setupStatusSelects(scope = document) {
+  if (!scope) return;
+  scope.querySelectorAll('.status-select').forEach(select => {
+    const card = select.closest('.dispatch-card');
+    const unit = card ? card.dataset.unit : select.dataset.unit;
+    if (!unit) return;
+    attachStatusSelect(select, unit);
+  });
+}
+
+function setBoardCollapsed(collapsed) {
+  if (!boardContainer || !boardToggle) return;
+  boardContainer.classList.toggle('collapsed', collapsed);
+  boardToggle.setAttribute('aria-expanded', String(!collapsed));
+  boardToggle.textContent = collapsed ? 'Übersicht einblenden' : 'Übersicht einklappen';
+}
+
+if (boardToggle) {
+  boardToggle.addEventListener('click', () => {
+    const isCollapsed = boardContainer?.classList.contains('collapsed');
+    setBoardCollapsed(!isCollapsed);
+  });
+}
+
 renderVehicleBoard();
 updateAvailabilityData();
 refreshUnitSelect();
+setupStatusSelects(statusBoard);
 function updateStatusSelect() {
     const unit = unitSelect.value;
     if (vehiclesData[unit]) {
