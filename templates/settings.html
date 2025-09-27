@@ -4,6 +4,26 @@
 <p>
     <a href="{{ url_for('download_log') }}" class="btn btn-secondary">Log herunterladen</a>
 </p>
+
+<h2 class="mt-4">Einsatzbereich für Alarmmonitor</h2>
+<form id="operation-area-form" class="row g-3 align-items-end">
+  <div class="col-md-6">
+    <label class="form-label" for="operation-area-name">Stadt / Einsatzbereich</label>
+    <input type="text" id="operation-area-name" class="form-control" value="{{ app_settings.operation_area.name }}" placeholder="z.&nbsp;B. Gießen">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label" for="operation-area-zoom">Standard Zoom</label>
+    <input type="number" id="operation-area-zoom" class="form-control" value="{{ app_settings.operation_area.zoom }}" min="3" max="18">
+  </div>
+  <div class="col-md-3">
+    <button type="submit" class="btn btn-primary w-100">Einsatzbereich speichern</button>
+  </div>
+  <div class="col-12">
+    <div id="operation-area-feedback" class="alert d-none" role="alert"></div>
+    <p id="operation-area-current" class="text-white-50 small mb-0">Aktuelles Zentrum: {{ '%.5f'|format(app_settings.operation_area.lat) }}, {{ '%.5f'|format(app_settings.operation_area.lon) }}</p>
+  </div>
+</form>
+
 <h2 class="mt-4">Sprachausgabe der Funkrufnamen</h2>
 <table class="table" id="tts-table">
   <thead><tr><th>Funkrufname</th><th>Sprachausgabe</th><th>Aktion</th></tr></thead>
@@ -108,6 +128,64 @@
 
 {% block scripts %}
 <script>
+const operationAreaForm = document.getElementById('operation-area-form');
+if (operationAreaForm) {
+  operationAreaForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const nameInput = document.getElementById('operation-area-name');
+    const zoomInput = document.getElementById('operation-area-zoom');
+    const feedback = document.getElementById('operation-area-feedback');
+    const currentEl = document.getElementById('operation-area-current');
+    const payload = {
+      name: nameInput ? nameInput.value.trim() : '',
+      zoom: zoomInput ? zoomInput.value : undefined,
+    };
+    if (feedback) {
+      feedback.classList.add('d-none');
+      feedback.classList.remove('alert-success', 'alert-danger');
+      feedback.textContent = '';
+    }
+    try {
+      const response = await fetch('/api/settings/operation-area', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) {
+        const message = (data && data.error) || 'Einsatzbereich konnte nicht gespeichert werden.';
+        throw new Error(message);
+      }
+      if (feedback) {
+        feedback.textContent = `Einsatzbereich aktualisiert: ${data.operation_area.name}`;
+        feedback.classList.remove('d-none');
+        feedback.classList.add('alert', 'alert-success');
+      }
+      if (nameInput && data.operation_area && data.operation_area.name !== undefined) {
+        nameInput.value = data.operation_area.name;
+      }
+      if (zoomInput && data.operation_area && data.operation_area.zoom !== undefined) {
+        zoomInput.value = data.operation_area.zoom;
+      }
+      if (currentEl && data.operation_area) {
+        const lat = Number(data.operation_area.lat);
+        const lon = Number(data.operation_area.lon);
+        const latText = Number.isFinite(lat) ? lat.toFixed(5) : '--';
+        const lonText = Number.isFinite(lon) ? lon.toFixed(5) : '--';
+        currentEl.textContent = `Aktuelles Zentrum: ${latText}, ${lonText}`;
+      }
+    } catch (err) {
+      if (feedback) {
+        feedback.textContent = err.message || 'Einsatzbereich konnte nicht gespeichert werden.';
+        feedback.classList.remove('d-none');
+        feedback.classList.add('alert', 'alert-danger');
+      } else {
+        alert(err.message || 'Einsatzbereich konnte nicht gespeichert werden.');
+      }
+    }
+  });
+}
+
 document.querySelectorAll('#tts-table .save').forEach(btn => {
   btn.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');

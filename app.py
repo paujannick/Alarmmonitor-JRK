@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify, Response, send_file
 import json
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from urllib import parse, request as urlrequest
 from queue import Queue, Empty
 import logging
@@ -9,6 +9,17 @@ import functools
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
+
+
+@app.context_processor
+def inject_template_globals():
+    host = ''
+    try:
+        if request.host:
+            host = request.host.split(':')[0]
+    except RuntimeError:
+        host = ''
+    return {'app_settings': settings, 'backend_host': host}
 
 
 def now_local_iso():
@@ -58,6 +69,7 @@ TEMPLATE_FILE = Path('data/templates.json')
 PRIORITY_FILE = Path('data/priorities.json')
 ANNOUNCEMENTS_FILE = Path('data/announcements.json')
 MAX_ANNOUNCEMENTS = 100
+SETTINGS_FILE = Path('data/settings.json')
 DEFAULT_VEHICLES = {
     'RTW1': {
         'name': 'Rettungswagen 1',
@@ -121,6 +133,46 @@ STATUS_TEXT = {
     8: 'Bedingt Einsatzbereit',
     9: 'Fremdanmeldung',
 }
+
+
+DEFAULT_SETTINGS = {
+    'operation_area': {
+        'name': 'Lich, Deutschland',
+        'lat': 50.517,
+        'lon': 8.816,
+        'zoom': 13,
+    }
+}
+
+
+def load_settings():
+    if SETTINGS_FILE.exists():
+        try:
+            with open(SETTINGS_FILE, encoding='utf-8') as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            data = {}
+    else:
+        data = {}
+    settings = DEFAULT_SETTINGS.copy()
+    if isinstance(data, dict):
+        operation_area = data.get('operation_area') or {}
+        if isinstance(operation_area, dict):
+            merged_area = settings['operation_area'].copy()
+            merged_area.update({
+                k: v
+                for k, v in operation_area.items()
+                if k in {'name', 'lat', 'lon', 'zoom'}
+            })
+            settings['operation_area'] = merged_area
+    return settings
+
+
+def save_settings():
+    SETTINGS_FILE.parent.mkdir(exist_ok=True)
+    with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(settings, f, ensure_ascii=False, indent=2)
+    notify_change()
 
 
 def load_vehicles():
@@ -345,8 +397,10 @@ incidents = load_incidents()
 templates = load_templates()
 priorities = load_priorities()
 announcements = load_announcements()
+settings = load_settings()
 
 listeners = []
+weather_cache = {'data': None, 'expires': None}
 
 
 def notify_change():
@@ -402,13 +456,44 @@ def geocode(address):
     query = parse.urlencode({'q': address, 'format': 'json'})
     url = f"https://nominatim.openstreetmap.org/search?{query}"
     try:
-        with urlrequest.urlopen(url, timeout=5) as resp:
+        req = urlrequest.Request(url, headers={'User-Agent': 'Alarmmonitor/1.0'})
+        with urlrequest.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode('utf-8'))
             if data:
                 return float(data[0]['lat']), float(data[0]['lon'])
     except Exception:
         pass
     return None, None
+
+
+def reverse_geocode(lat, lon):
+    if lat is None or lon is None:
+        return None
+    try:
+        lat = float(lat)
+        lon = float(lon)
+    except (TypeError, ValueError):
+        return None
+    query = parse.urlencode(
+        {
+            'lat': lat,
+            'lon': lon,
+            'format': 'jsonv2',
+            'accept-language': 'de',
+        }
+    )
+    url = f"https://nominatim.openstreetmap.org/reverse?{query}"
+    try:
+        req = urlrequest.Request(url, headers={'User-Agent': 'Alarmmonitor/1.0'})
+        with urlrequest.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            if isinstance(data, dict):
+                display = data.get('display_name')
+                if display:
+                    return display
+    except Exception:
+        pass
+    return None
 
 
 @app.route('/')
@@ -742,9 +827,24 @@ def api_create_incident():
     data = request.json or {}
     keyword = data.get('keyword', '')
     note = data.get('note', '')
-    location = data.get('location', '')
-    lat = data.get('lat') or None
-    lon = data.get('lon') or None
+    location_raw = data.get('location', '')
+    lat = data.get('lat')
+    lon = data.get('lon')
+    if isinstance(location_raw, dict):
+        location = location_raw.get('name', '')
+        lat = location_raw.get('lat', lat)
+        lon = location_raw.get('lon', lon)
+    else:
+        location = location_raw
+    location = (location or '').strip()
+    try:
+        lat = float(lat)
+    except (TypeError, ValueError):
+        lat = None
+    try:
+        lon = float(lon)
+    except (TypeError, ValueError):
+        lon = None
     priority = data.get('priority', '')
     patient = data.get('patient', '')
     vehicles_req = data.get('vehicles', [])
@@ -918,17 +1018,46 @@ def api_update_incident(inc_id):
         if inc['id'] == inc_id:
             inc = normalise_incident(inc)
             keyword = data.get('keyword')
-            loc = data.get('location') or {}
-            loc_name = loc.get('name') if isinstance(loc, dict) else loc
+            location_raw = data.get('location')
             priority = data.get('priority')
             patient = data.get('patient')
             note = data.get('note')
             vehicles_req = data.get('vehicles')
+            lat_value = data.get('lat')
+            lon_value = data.get('lon')
+            if isinstance(location_raw, dict):
+                loc_name = location_raw.get('name')
+                if lat_value is None:
+                    lat_value = location_raw.get('lat')
+                if lon_value is None:
+                    lon_value = location_raw.get('lon')
+            else:
+                loc_name = location_raw
+            if loc_name is not None:
+                loc_name = (loc_name or '').strip()
             if keyword is not None:
                 inc['keyword'] = keyword
             if loc_name is not None:
                 inc['location']['name'] = loc_name
-                if not inc['location'].get('lat') or not inc['location'].get('lon'):
+                if loc_name == '':
+                    inc['location']['lat'] = None
+                    inc['location']['lon'] = None
+            try:
+                lat_value = float(lat_value)
+            except (TypeError, ValueError):
+                lat_value = None
+            try:
+                lon_value = float(lon_value)
+            except (TypeError, ValueError):
+                lon_value = None
+            if lat_value is not None:
+                inc['location']['lat'] = lat_value
+            if lon_value is not None:
+                inc['location']['lon'] = lon_value
+            if loc_name:
+                lat = inc['location'].get('lat')
+                lon = inc['location'].get('lon')
+                if lat is None or lon is None:
                     lat, lon = geocode(loc_name)
                     inc['location']['lat'] = lat
                     inc['location']['lon'] = lon
@@ -1014,6 +1143,120 @@ def api_update_incident(inc_id):
                 return jsonify(removal_error), 400
             return jsonify({'ok': True})
     return jsonify({'ok': False}), 404
+
+
+@app.route('/api/settings', methods=['GET'])
+def api_get_settings():
+    return jsonify(settings)
+
+
+@app.route('/api/settings/operation-area', methods=['PUT'])
+def api_update_operation_area():
+    data = request.json or {}
+    operation_area = dict(settings.get('operation_area') or {})
+    name = (data.get('name') or '').strip()
+    lat = data.get('lat')
+    lon = data.get('lon')
+    zoom_value = data.get('zoom', operation_area.get('zoom', 13))
+    try:
+        zoom = int(float(zoom_value))
+    except (TypeError, ValueError):
+        zoom = operation_area.get('zoom', 13)
+    zoom = max(3, min(18, zoom))
+    if lat is None and lon is None and not name:
+        return jsonify({'ok': False, 'error': 'Einsatzbereich erfordert einen Namen oder Koordinaten.'}), 400
+    try:
+        lat = float(lat) if lat is not None else None
+    except (TypeError, ValueError):
+        lat = None
+    try:
+        lon = float(lon) if lon is not None else None
+    except (TypeError, ValueError):
+        lon = None
+    if (lat is None or lon is None) and name:
+        lat, lon = geocode(name)
+    if lat is None or lon is None:
+        return jsonify({'ok': False, 'error': 'Ort konnte nicht gefunden werden.'}), 400
+    if not name:
+        display = reverse_geocode(lat, lon)
+        if display:
+            name = display
+        else:
+            name = f"{lat:.5f}, {lon:.5f}"
+    operation_area.update({'name': name, 'lat': lat, 'lon': lon, 'zoom': zoom})
+    settings['operation_area'] = operation_area
+    weather_cache['data'] = None
+    weather_cache['expires'] = None
+    save_settings()
+    return jsonify({'ok': True, 'operation_area': operation_area})
+
+
+@app.route('/api/geocode/reverse')
+def api_reverse_geocode():
+    lat = request.args.get('lat')
+    lon = request.args.get('lon')
+    try:
+        lat_value = float(lat)
+        lon_value = float(lon)
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'error': 'Ungültige Koordinaten.'}), 400
+    address = reverse_geocode(lat_value, lon_value)
+    if not address:
+        return jsonify({'ok': False, 'error': 'Adresse wurde nicht gefunden.'}), 404
+    return jsonify({'ok': True, 'address': address, 'lat': lat_value, 'lon': lon_value})
+
+
+@app.route('/api/weather')
+def api_weather():
+    operation_area = settings.get('operation_area') or {}
+    lat = operation_area.get('lat')
+    lon = operation_area.get('lon')
+    if lat is None or lon is None:
+        return jsonify({'ok': False, 'error': 'Kein Einsatzbereich konfiguriert.'}), 400
+    try:
+        lat = float(lat)
+        lon = float(lon)
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'error': 'Ungültige Einsatzbereich-Koordinaten.'}), 400
+    now = datetime.now(timezone.utc)
+    cache = weather_cache
+    if cache['data'] and cache['expires'] and cache['expires'] > now:
+        return jsonify(cache['data'])
+    query = parse.urlencode(
+        {
+            'latitude': lat,
+            'longitude': lon,
+            'current': 'temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code',
+            'timezone': 'auto',
+        }
+    )
+    url = f"https://api.open-meteo.com/v1/forecast?{query}"
+    try:
+        req = urlrequest.Request(url, headers={'User-Agent': 'Alarmmonitor/1.0'})
+        with urlrequest.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+    except Exception:
+        return jsonify({'ok': False, 'error': 'Wetterdienst nicht erreichbar.'}), 502
+    current = data.get('current_weather') or data.get('current') or {}
+    payload = {
+        'ok': True,
+        'operation_area': {
+            'name': operation_area.get('name', ''),
+            'lat': lat,
+            'lon': lon,
+            'zoom': operation_area.get('zoom', 13),
+        },
+        'current': {
+            'time': current.get('time'),
+            'temperature': current.get('temperature') or current.get('temperature_2m'),
+            'humidity': current.get('relative_humidity_2m'),
+            'wind_speed': current.get('windspeed') or current.get('wind_speed_10m'),
+            'weather_code': current.get('weathercode') or current.get('weather_code'),
+        },
+    }
+    cache['data'] = payload
+    cache['expires'] = now + timedelta(minutes=5)
+    return jsonify(payload)
 
 
 @app.route('/settings')
