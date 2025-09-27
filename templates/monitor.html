@@ -42,22 +42,16 @@
           <thead>
             <tr>
               <th>Fahrzeug / Funkrufname</th>
-              <th>Icon</th>
               <th>Status</th>
-              <th>Hinweis</th>
               <th>Ort</th>
-              <th>Farbe</th>
             </tr>
           </thead>
           <tbody>
           {% for name, info in vehicles.items() %}
             <tr data-unit="{{ name }}" class="status-{{ info.status }}">
               <td class="unit-cell"><strong>{{ info.name }}</strong><br><small>{{ info.callsign }}</small></td>
-              <td class="icon-cell">{% if info.icon %}<img src="{{ url_for('static', filename=info.icon) }}" height="28" width="28" class="rounded-circle bg-dark p-1">{% endif %}</td>
               <td class="status-text">{{ info.status }} - {{ status_text[info.status] }}</td>
-              <td class="note">{{ info.note }}</td>
               <td class="location">{{ info.location }}</td>
-              <td class="status-color-cell"><span class="status-color"></span></td>
             </tr>
           {% endfor %}
           </tbody>
@@ -88,6 +82,10 @@ const statusText = {{ status_text|tojson }};
 const lastAlarmIds = {};
 let lastAlarmUnit = null;
 const vehicleIcons = {};
+const seenAnnouncements = new Set();
+const seenAnnouncementOrder = [];
+const SEEN_ANNOUNCEMENT_LIMIT = 200;
+let announcementsInitialised = false;
 for (const [unit, info] of Object.entries(vehicleData)) {
     const initId = info.alarm_time || info.incident_id;
     lastAlarmIds[unit] = initId ? `${unit}:${initId}` : null;
@@ -443,6 +441,93 @@ function speak(text) {
     });
 }
 
+function rememberAnnouncementId(id) {
+    if (!id) return;
+    if (seenAnnouncements.has(id)) return;
+    seenAnnouncements.add(id);
+    seenAnnouncementOrder.push(id);
+    while (seenAnnouncementOrder.length > SEEN_ANNOUNCEMENT_LIMIT) {
+        const removed = seenAnnouncementOrder.shift();
+        if (removed) {
+            seenAnnouncements.delete(removed);
+        }
+    }
+}
+
+function enqueueAlarm(item, options = {}) {
+    const { playGong = true } = options;
+    alarmQueue.push(item);
+    if (alarmProcessing) return;
+    alarmProcessing = true;
+    if (!playGong) {
+        processAlarmQueue();
+        return;
+    }
+    if (audioUnlocked) {
+        alarmSound.currentTime = 0;
+        alarmSound.play()
+            .then(() => {
+                alarmSound.onended = () => {
+                    alarmSound.onended = null;
+                    processAlarmQueue();
+                };
+            })
+            .catch(() => {
+                processAlarmQueue();
+            });
+    } else {
+        enableBtn.style.display = '';
+        processAlarmQueue();
+    }
+}
+
+function queueAnnouncement(entry) {
+    if (!entry) return;
+    const key = entry.id !== undefined && entry.id !== null
+        ? String(entry.id)
+        : (entry.time ? `time:${entry.time}` : null);
+    if (key && seenAnnouncements.has(key)) return;
+    const text = (entry.text || '').trim();
+    if (!text) {
+        if (key) rememberAnnouncementId(key);
+        return;
+    }
+    if (key) rememberAnnouncementId(key);
+    const speechText = `Achtung, eine Durchsage: ${text}`;
+    enqueueAlarm({
+        displayCallsign: 'Durchsage',
+        displayPriorityHtml: '',
+        displayText: text,
+        speechText,
+        announcementId: key,
+    });
+}
+
+function processAnnouncements(list) {
+    if (!Array.isArray(list)) return;
+    const sorted = list
+        .slice()
+        .sort((a, b) => {
+            const aTime = (a && a.time) || '';
+            const bTime = (b && b.time) || '';
+            return aTime.localeCompare(bTime);
+        });
+    if (!announcementsInitialised) {
+        sorted.forEach(entry => {
+            if (!entry) return;
+            const key = entry.id !== undefined && entry.id !== null
+                ? String(entry.id)
+                : (entry.time ? `time:${entry.time}` : null);
+            if (key) {
+                rememberAnnouncementId(key);
+            }
+        });
+        announcementsInitialised = true;
+        return;
+    }
+    sorted.forEach(entry => queueAnnouncement(entry));
+}
+
 function triggerAlarm(unit, info, alarmId) {
     alarmId = alarmId || computeAlarmId(unit, info);
     if (alarmId === lastAlarmId) return;
@@ -463,24 +548,7 @@ function triggerAlarm(unit, info, alarmId) {
     const displayPriorityHtml = priority
         ? `<span class="badge bg-warning text-dark ms-2 me-3">${priority}</span>`
         : '';
-    alarmQueue.push({alarmId, displayCallsign, speechText, displayText, displayPriorityHtml});
-    if (!alarmProcessing) {
-        alarmProcessing = true;
-        if (audioUnlocked) {
-            alarmSound.currentTime = 0;
-            alarmSound.play().then(() => {
-                alarmSound.onended = () => {
-                    alarmSound.onended = null;
-                    processAlarmQueue();
-                };
-            }).catch(() => {
-                processAlarmQueue();
-            });
-        } else {
-            enableBtn.style.display = '';
-            processAlarmQueue();
-        }
-    }
+    enqueueAlarm({alarmId, displayCallsign, speechText, displayText, displayPriorityHtml});
     if (info.lat && info.lon) {
         if (vehicleMarkers[unit]) {
             vehicleMarkers[unit].setLatLng([info.lat, info.lon]);
@@ -552,15 +620,17 @@ async function refresh() {
     }
     refreshing = true;
     try {
-        const [statusRes, incidentsRes] = await Promise.all([
+        const [statusRes, incidentsRes, announcementsRes] = await Promise.all([
             fetch('/api/status', {cache: 'no-store'}),
-            fetch('/api/incidents', {cache: 'no-store'})
+            fetch('/api/incidents', {cache: 'no-store'}),
+            fetch('/api/announcements', {cache: 'no-store'})
         ]);
-        if (!statusRes.ok || !incidentsRes.ok) {
+        if (!statusRes.ok || !incidentsRes.ok || !announcementsRes.ok) {
             throw new Error('Netzwerkfehler');
         }
         const data = await statusRes.json();
         const incs = await incidentsRes.json();
+        const announcementsData = await announcementsRes.json();
         setConnectionStatus(true);
         const tbody = vehicleTableEl ? vehicleTableEl.tBodies[0] : null;
         const existingRows = new Map();
@@ -581,11 +651,8 @@ async function refresh() {
                 row.dataset.unit = unit;
                 row.innerHTML = `
                     <td class="unit-cell"></td>
-                    <td class="icon-cell"></td>
                     <td class="status-text"></td>
-                    <td class="note"></td>
                     <td class="location"></td>
-                    <td class="status-color-cell"><span class="status-color"></span></td>
                 `;
                 tbody.appendChild(row);
             }
@@ -593,15 +660,11 @@ async function refresh() {
             row.className = `status-${info.status}`;
             const statusLabel = statusText[info.status] || '';
             row.querySelector('.status-text').textContent = `${info.status} - ${statusLabel}`.trim();
-            row.querySelector('.note').textContent = info.note || '';
             row.querySelector('.location').textContent = info.location || '';
             row.querySelector('.unit-cell').innerHTML = `<strong>${info.name}</strong><br><small>${info.callsign}</small>`;
-            const iconCell = row.querySelector('.icon-cell');
             if (info.icon) {
-                iconCell.innerHTML = `<img src="/static/${info.icon}" height="24">`;
                 vehicleIcons[unit] = L.icon({iconUrl:`/static/${info.icon}`, iconSize:[32,32], iconAnchor:[16,16]});
             } else {
-                iconCell.innerHTML = '';
                 delete vehicleIcons[unit];
             }
             const hasAlertInfo = info.note || info.location;
@@ -673,6 +736,7 @@ async function refresh() {
             }
         }
         renderActiveIncidents(incs);
+        processAnnouncements(announcementsData);
     adjustVehicleTableSize();
     fitMapToAll();
     } catch (err) {

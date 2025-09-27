@@ -12,9 +12,11 @@ def setup_app():
     # prevent file writes during tests
     app.save_vehicles = lambda: None
     app.save_incidents = lambda: None
+    app.save_announcements = lambda: None
     # reset in-memory data
     app.vehicles = {k: v.copy() for k, v in app.DEFAULT_VEHICLES.items()}
     app.incidents = []
+    app.announcements = []
     return app, app.app.test_client()
 
 
@@ -118,6 +120,51 @@ def test_vehicle_can_be_alerted_after_removed_from_incident():
     assert not data['skipped']
     assert app.vehicles['RTW1']['incident_id'] == inc_b
     assert app.vehicles['RTW1']['status'] == 1
+
+
+def test_vehicle_assignment_persists_on_status_change():
+    app, client = setup_app()
+    resp = client.post('/api/incidents', json={'keyword': 'Test', 'location': 'Loc', 'vehicles': ['RTW1']})
+    inc_id = resp.get_json()['id']
+    assert app.vehicles['RTW1']['incident_id'] == inc_id
+
+    client.post('/api/dispatch', json={'unit': 'RTW1', 'status': 4})
+    assert app.vehicles['RTW1']['status'] == 4
+    assert app.vehicles['RTW1']['incident_id'] == inc_id
+
+    client.post('/api/dispatch', json={'unit': 'RTW1', 'status': 1})
+    assert app.vehicles['RTW1']['incident_id'] is None
+
+
+def test_remove_vehicle_requires_free_status():
+    app, client = setup_app()
+    resp = client.post('/api/incidents', json={'keyword': 'Test', 'location': 'Loc', 'vehicles': ['RTW1']})
+    inc_id = resp.get_json()['id']
+    client.post('/api/dispatch', json={'unit': 'RTW1', 'status': 4})
+
+    response = client.put(f'/api/incidents/{inc_id}', json={'vehicles': []})
+    data = response.get_json()
+    assert response.status_code == 400
+    assert not data['ok']
+    assert 'blocked' in data and 'RTW1' in data['blocked']
+    assert app.vehicles['RTW1']['incident_id'] == inc_id
+
+    client.post('/api/dispatch', json={'unit': 'RTW1', 'status': 1})
+    response = client.put(f'/api/incidents/{inc_id}', json={'vehicles': []})
+    assert response.status_code == 200
+    assert app.vehicles['RTW1']['incident_id'] is None
+
+
+def test_create_announcement():
+    app, client = setup_app()
+    resp = client.post('/api/announcements', json={'text': 'Test Durchsage'})
+    data = resp.get_json()
+    assert resp.status_code == 200
+    assert data['ok']
+    assert app.announcements
+    entry = app.announcements[-1]
+    assert entry['text'] == 'Test Durchsage'
+    assert 'id' in entry
 
 
 def test_legacy_ended_incident_does_not_block_alert():
