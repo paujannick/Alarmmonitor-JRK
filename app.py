@@ -6,6 +6,7 @@ from urllib import parse, request as urlrequest
 from queue import Queue, Empty
 import logging
 import functools
+from copy import deepcopy
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
@@ -141,8 +142,25 @@ DEFAULT_SETTINGS = {
         'lat': 50.517,
         'lon': 8.816,
         'zoom': 13,
-    }
+    },
+    'monitor': {
+        'show_weather': True,
+    },
 }
+
+
+def parse_bool(value, default=False):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {'true', '1', 'yes', 'on'}:
+            return True
+        if lowered in {'false', '0', 'no', 'off'}:
+            return False
+    return default
 
 
 def load_settings():
@@ -154,7 +172,7 @@ def load_settings():
             data = {}
     else:
         data = {}
-    settings = DEFAULT_SETTINGS.copy()
+    settings = deepcopy(DEFAULT_SETTINGS)
     if isinstance(data, dict):
         operation_area = data.get('operation_area') or {}
         if isinstance(operation_area, dict):
@@ -165,6 +183,15 @@ def load_settings():
                 if k in {'name', 'lat', 'lon', 'zoom'}
             })
             settings['operation_area'] = merged_area
+        monitor_settings = data.get('monitor') or {}
+        if isinstance(monitor_settings, dict):
+            merged_monitor = settings['monitor'].copy()
+            if 'show_weather' in monitor_settings:
+                merged_monitor['show_weather'] = parse_bool(
+                    monitor_settings.get('show_weather'),
+                    merged_monitor.get('show_weather', True),
+                )
+            settings['monitor'] = merged_monitor
     return settings
 
 
@@ -1189,6 +1216,21 @@ def api_update_operation_area():
     weather_cache['expires'] = None
     save_settings()
     return jsonify({'ok': True, 'operation_area': operation_area})
+
+
+@app.route('/api/settings/monitor', methods=['PUT'])
+def api_update_monitor_settings():
+    data = request.json or {}
+    monitor_settings = dict(settings.get('monitor') or {})
+    if 'show_weather' not in data:
+        return jsonify({'ok': False, 'error': 'Keine gültigen Monitor-Einstellungen übermittelt.'}), 400
+    monitor_settings['show_weather'] = parse_bool(
+        data.get('show_weather'),
+        monitor_settings.get('show_weather', True),
+    )
+    settings['monitor'] = monitor_settings
+    save_settings()
+    return jsonify({'ok': True, 'monitor': monitor_settings})
 
 
 @app.route('/api/geocode/reverse')

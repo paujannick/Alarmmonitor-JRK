@@ -24,6 +24,14 @@
   </div>
 </form>
 
+<h2 class="mt-4">Anzeigeoptionen</h2>
+<div class="form-check form-switch">
+  <input class="form-check-input" type="checkbox" id="monitor-show-weather" {% if app_settings.monitor.show_weather %}checked{% endif %}>
+  <label class="form-check-label" for="monitor-show-weather">Wetter-Kachel auf dem Monitor anzeigen</label>
+</div>
+<div id="monitor-settings-feedback" class="alert d-none mt-3" role="alert"></div>
+<p class="text-white-50 small">Blendt die Wetter-Kachel aus, wenn der verfügbare Platz für andere Kacheln benötigt wird.</p>
+
 <h2 class="mt-4">Sprachausgabe der Funkrufnamen</h2>
 <table class="table" id="tts-table">
   <thead><tr><th>Funkrufname</th><th>Sprachausgabe</th><th>Aktion</th></tr></thead>
@@ -128,6 +136,54 @@
 
 {% block scripts %}
 <script>
+const monitorToggle = document.getElementById('monitor-show-weather');
+const monitorFeedback = document.getElementById('monitor-settings-feedback');
+
+function resetMonitorFeedback() {
+  if (!monitorFeedback) return;
+  monitorFeedback.classList.add('d-none');
+  monitorFeedback.classList.remove('alert-success', 'alert-danger');
+  monitorFeedback.textContent = '';
+}
+
+if (monitorToggle) {
+  monitorToggle.addEventListener('change', async () => {
+    const enabled = monitorToggle.checked;
+    resetMonitorFeedback();
+    monitorToggle.disabled = true;
+    try {
+      const response = await fetch('/api/settings/monitor', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ show_weather: enabled }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) {
+        const message = (data && data.error) || 'Monitor-Einstellungen konnten nicht gespeichert werden.';
+        throw new Error(message);
+      }
+      if (monitorFeedback) {
+        monitorFeedback.textContent = enabled
+          ? 'Die Wetter-Kachel ist nun sichtbar.'
+          : 'Die Wetter-Kachel wurde ausgeblendet.';
+        monitorFeedback.classList.remove('d-none');
+        monitorFeedback.classList.add('alert-success');
+      }
+    } catch (err) {
+      monitorToggle.checked = !enabled;
+      if (monitorFeedback) {
+        monitorFeedback.textContent = err.message || 'Monitor-Einstellungen konnten nicht gespeichert werden.';
+        monitorFeedback.classList.remove('d-none');
+        monitorFeedback.classList.add('alert-danger');
+      } else {
+        alert(err.message || 'Monitor-Einstellungen konnten nicht gespeichert werden.');
+      }
+    } finally {
+      monitorToggle.disabled = false;
+    }
+  });
+}
+
 const operationAreaForm = document.getElementById('operation-area-form');
 if (operationAreaForm) {
   operationAreaForm.addEventListener('submit', async event => {

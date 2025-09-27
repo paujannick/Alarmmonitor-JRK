@@ -68,11 +68,20 @@ body {
   display: grid;
   gap: 0.35rem;
   padding: 0.85rem 1.1rem;
-  border-radius: 1rem;
+  border-radius: 1.5rem;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
   min-width: 220px;
+}
+
+.monitor-weather-card {
+  display: flex;
+  align-items: stretch;
+}
+
+.monitor-weather-card .monitor-weather {
+  width: 100%;
 }
 
 .monitor-weather__primary {
@@ -543,6 +552,34 @@ body {
   width: 1.4rem;
   height: 1.4rem;
   fill: currentColor;
+}
+
+#incident-location-picker-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.85rem;
+}
+
+#incident-location-picker-inline svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  fill: currentColor;
+}
+
+.location-picker-popup {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 220px;
+}
+
+.location-picker-popup__address {
+  font-weight: 600;
+}
+
+.location-picker-popup__coords {
+  font-size: 0.85rem;
+  color: #495057;
 }
 
 @keyframes pulse-disconnected {
