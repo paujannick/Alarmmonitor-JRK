@@ -11,6 +11,9 @@ Komplettlösung für einen webbasierten Alarmmonitor und ein Leitstellen-Interfa
 - Fahrzeugverwaltung zum Hinzufügen und Entfernen von Einheiten inklusive Funkrufnamen und Besatzung
 - Einsatzdokumentation in `data/incidents.json` mit Einsatztagebuch, Fahrzeugzuordnung und manueller Start/Beendigung
 - Alarmmonitor im Vollbildmodus mit Kartenansicht, Fahrzeugpositionen und versteckter Menüleiste im Vollbild
+- Permanente Backend-Verbindungsanzeige inklusive Hostinformationen – auch im Vollbild sichtbar
+- Konfigurierbarer Einsatzbereich mit automatischer Zentrierung der Kartenansichten sowie Wetteranzeige für den gewählten Ort
+- Kartengestützte Einsatzortwahl in der Leitstelle mit Zoom und Reverse-Geocoding
 - Installationsskript für virtuelle Umgebung und Startskript
 
 ### Alarmgong hinzufügen

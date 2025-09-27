@@ -25,6 +25,20 @@
     </div>
     <div class="monitor-meta">
       <div class="monitor-time text-end" id="datetime"></div>
+      <div class="monitor-weather" id="monitor-weather" aria-live="polite">
+        <div class="monitor-weather__primary">
+          <span class="monitor-weather__temp" data-role="weather-temp">--°C</span>
+          <span class="monitor-weather__summary" data-role="weather-summary">Wetter wird geladen…</span>
+        </div>
+        <div class="monitor-weather__details">
+          <span class="monitor-weather__detail" data-role="weather-wind">Wind: -- km/h</span>
+          <span class="monitor-weather__detail" data-role="weather-humidity">Feuchte: --%</span>
+        </div>
+        <div class="monitor-weather__meta">
+          <span class="monitor-weather__location" data-role="weather-location">{{ app_settings.operation_area.name }}</span>
+          <span class="monitor-weather__updated" data-role="weather-updated"></span>
+        </div>
+      </div>
       <div class="monitor-controls">
         <button id="enable-audio" class="btn btn-outline-light btn-sm">Ton aktivieren</button>
         <button id="fullscreen" class="btn btn-outline-light btn-sm">Vollbild</button>
@@ -79,6 +93,23 @@
 <script>
 const vehicleData = {{ vehicles|tojson }};
 const statusText = {{ status_text|tojson }};
+const operationAreaInitial = {{ app_settings.operation_area|tojson }} || {};
+const fallbackLat = 50.517;
+const fallbackLon = 8.816;
+const fallbackZoom = 13;
+function toNumber(value, fallback) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+let mapDefaultLat = toNumber(operationAreaInitial.lat, fallbackLat);
+let mapDefaultLon = toNumber(operationAreaInitial.lon, fallbackLon);
+let mapDefaultZoom = Math.max(3, Math.min(18, toNumber(operationAreaInitial.zoom, fallbackZoom)));
+let operationArea = {
+    name: (operationAreaInitial.name || '').trim(),
+    lat: mapDefaultLat,
+    lon: mapDefaultLon,
+    zoom: mapDefaultZoom,
+};
 const lastAlarmIds = {};
 let lastAlarmUnit = null;
 const vehicleIcons = {};
@@ -98,6 +129,17 @@ const latestDiv = document.getElementById('latest-incident');
 const enableBtn = document.getElementById('enable-audio');
 const fullscreenBtn = document.getElementById('fullscreen');
 const datetimeEl = document.getElementById('datetime');
+const weatherEl = document.getElementById('monitor-weather');
+const weatherElements = weatherEl
+    ? {
+        temp: weatherEl.querySelector('[data-role="weather-temp"]'),
+        summary: weatherEl.querySelector('[data-role="weather-summary"]'),
+        wind: weatherEl.querySelector('[data-role="weather-wind"]'),
+        humidity: weatherEl.querySelector('[data-role="weather-humidity"]'),
+        location: weatherEl.querySelector('[data-role="weather-location"]'),
+        updated: weatherEl.querySelector('[data-role="weather-updated"]'),
+    }
+    : {};
 let audioUnlocked = false;
 const ttsEl = new Audio();
 let lastAlarmId = null;
@@ -105,7 +147,7 @@ const alarmQueue = [];
 let alarmProcessing = false;
 let refreshing = false;
 let refreshQueued = false;
-const map = L.map('map').setView([50.517, 8.816], 13);
+const map = L.map('map').setView([mapDefaultLat, mapDefaultLon], mapDefaultZoom);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '© OpenStreetMap'}).addTo(map);
 const vehicleMarkers = {};
 const incidentMarkers = {};
@@ -115,6 +157,69 @@ const tableContainer = document.getElementById('vehicle-table-container');
 const vehicleTableEl = document.getElementById('vehicle-table');
 let vehicleTableBaseFontSize = null;
 let pendingTableResize = false;
+const WEATHER_CODE_MAP = {
+    0: 'Klar',
+    1: 'Überwiegend klar',
+    2: 'Teilweise bewölkt',
+    3: 'Bewölkt',
+    45: 'Nebel',
+    48: 'Reifender Nebel',
+    51: 'Leichter Nieselregen',
+    53: 'Nieselregen',
+    55: 'Starker Nieselregen',
+    56: 'Gefrierender Nieselregen',
+    57: 'Starker gefrierender Nieselregen',
+    61: 'Leichter Regen',
+    63: 'Regen',
+    65: 'Starker Regen',
+    66: 'Gefrierender Regen',
+    67: 'Starker gefrierender Regen',
+    71: 'Leichter Schneefall',
+    73: 'Schneefall',
+    75: 'Starker Schneefall',
+    77: 'Schneekörner',
+    80: 'Leichte Regenschauer',
+    81: 'Regenschauer',
+    82: 'Starke Regenschauer',
+    85: 'Leichte Schneeschauer',
+    86: 'Schneeschauer',
+    95: 'Gewitter',
+    96: 'Gewitter mit Hagel',
+    99: 'Starkes Gewitter mit Hagel',
+};
+let weatherLastFetch = 0;
+const WEATHER_REFRESH_INTERVAL = 5 * 60 * 1000;
+
+function setOperationArea(area) {
+    if (!area) return false;
+    const lat = toNumber(area.lat, mapDefaultLat);
+    const lon = toNumber(area.lon, mapDefaultLon);
+    const zoomValue = Math.max(3, Math.min(18, toNumber(area.zoom, mapDefaultZoom)));
+    const name = (area.name || '').trim();
+    const changed =
+        lat !== mapDefaultLat ||
+        lon !== mapDefaultLon ||
+        zoomValue !== mapDefaultZoom ||
+        name !== (operationArea.name || '');
+    operationArea = {
+        name,
+        lat,
+        lon,
+        zoom: zoomValue,
+    };
+    mapDefaultLat = lat;
+    mapDefaultLon = lon;
+    mapDefaultZoom = zoomValue;
+    if (weatherElements.location) {
+        weatherElements.location.textContent = name || '—';
+    }
+    if (!Object.keys(incidentMarkers).length) {
+        map.setView([mapDefaultLat, mapDefaultLon], mapDefaultZoom);
+    }
+    return changed;
+}
+
+setOperationArea(operationAreaInitial);
 
 function formatDateTime(value, options = {}) {
     if (!value) return '—';
@@ -135,6 +240,90 @@ function formatTime(value) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
     return date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+}
+
+function describeWeather(code) {
+    const numeric = Number(code);
+    if (Number.isNaN(numeric)) return 'Wetter unbekannt';
+    return WEATHER_CODE_MAP[numeric] || 'Wetter unbekannt';
+}
+
+function formatWeatherTime(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return `Aktualisiert ${date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function applyWeather(data) {
+    if (!weatherEl) return;
+    const current = (data && data.current) || {};
+    const locationName = (data && data.operation_area && data.operation_area.name) || operationArea.name || '';
+    const temperature = Number(current.temperature);
+    const humidity = Number(current.humidity);
+    const wind = Number(current.wind_speed);
+    const summary = describeWeather(current.weather_code);
+    weatherEl.classList.toggle('monitor-weather--error', false);
+    if (weatherElements.temp) {
+        weatherElements.temp.textContent = Number.isFinite(temperature) ? `${temperature.toFixed(1)}°C` : '--°C';
+    }
+    if (weatherElements.summary) {
+        weatherElements.summary.textContent = summary;
+    }
+    if (weatherElements.wind) {
+        weatherElements.wind.textContent = Number.isFinite(wind) ? `Wind: ${wind.toFixed(0)} km/h` : 'Wind: -- km/h';
+    }
+    if (weatherElements.humidity) {
+        weatherElements.humidity.textContent = Number.isFinite(humidity) ? `Feuchte: ${humidity.toFixed(0)} %` : 'Feuchte: --%';
+    }
+    if (weatherElements.location) {
+        weatherElements.location.textContent = locationName || '—';
+    }
+    if (weatherElements.updated) {
+        weatherElements.updated.textContent = formatWeatherTime(current.time);
+    }
+}
+
+function showWeatherError(message) {
+    if (!weatherEl) return;
+    weatherEl.classList.toggle('monitor-weather--error', true);
+    if (weatherElements.summary) {
+        weatherElements.summary.textContent = message || 'Keine Wetterdaten';
+    }
+    if (weatherElements.temp) {
+        weatherElements.temp.textContent = '--°C';
+    }
+    if (weatherElements.wind) {
+        weatherElements.wind.textContent = 'Wind: -- km/h';
+    }
+    if (weatherElements.humidity) {
+        weatherElements.humidity.textContent = 'Feuchte: --%';
+    }
+    if (weatherElements.updated) {
+        weatherElements.updated.textContent = '';
+    }
+}
+
+async function fetchWeather(force = false) {
+    if (!weatherEl) return;
+    const now = Date.now();
+    if (!force && now - weatherLastFetch < 60_000) {
+        return;
+    }
+    weatherLastFetch = now;
+    try {
+        const res = await fetch('/api/weather', { cache: 'no-store' });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok || !payload.ok) {
+            const msg = payload?.error || 'Wetterdaten nicht verfügbar';
+            showWeatherError(msg);
+            return;
+        }
+        applyWeather(payload);
+    } catch (err) {
+        console.error('Wetterabruf fehlgeschlagen', err);
+        showWeatherError('Wetterdaten nicht verfügbar');
+    }
 }
 
 function ensureVehicleTableBaseFontSize() {
@@ -373,11 +562,11 @@ function fitMapToAll() {
         ...Object.values(vehicleMarkers),
         ...Object.values(incidentMarkers)
     ].filter(m => m);
-    if (Object.keys(incidentMarkers).length === 0) {
-        map.setView([50.517, 8.816], 13);
-    } else if (markers.length) {
+    if (markers.length) {
         const group = new L.featureGroup(markers);
         map.fitBounds(group.getBounds().pad(0.05));
+    } else {
+        map.setView([mapDefaultLat, mapDefaultLon], mapDefaultZoom);
     }
 }
 const icons = {
@@ -620,17 +809,25 @@ async function refresh() {
     }
     refreshing = true;
     try {
-        const [statusRes, incidentsRes, announcementsRes] = await Promise.all([
+        const [statusRes, incidentsRes, announcementsRes, settingsRes] = await Promise.all([
             fetch('/api/status', {cache: 'no-store'}),
             fetch('/api/incidents', {cache: 'no-store'}),
-            fetch('/api/announcements', {cache: 'no-store'})
+            fetch('/api/announcements', {cache: 'no-store'}),
+            fetch('/api/settings', {cache: 'no-store'})
         ]);
-        if (!statusRes.ok || !incidentsRes.ok || !announcementsRes.ok) {
+        if (!statusRes.ok || !incidentsRes.ok || !announcementsRes.ok || !settingsRes.ok) {
             throw new Error('Netzwerkfehler');
         }
         const data = await statusRes.json();
         const incs = await incidentsRes.json();
         const announcementsData = await announcementsRes.json();
+        const settingsData = await settingsRes.json();
+        if (settingsData && settingsData.operation_area) {
+            const changed = setOperationArea(settingsData.operation_area);
+            if (changed) {
+                fetchWeather(true);
+            }
+        }
         setConnectionStatus(true);
         const tbody = vehicleTableEl ? vehicleTableEl.tBodies[0] : null;
         const existingRows = new Map();
@@ -806,5 +1003,9 @@ refresh();
 setInterval(() => {
     refresh();
 }, 30000);
+if (weatherEl) {
+    fetchWeather(true);
+    setInterval(() => fetchWeather(false), WEATHER_REFRESH_INTERVAL);
+}
 </script>
 {% endblock %}

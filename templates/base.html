@@ -17,13 +17,16 @@
             <a class="navbar-brand" href="/vehicles">Fahrzeuge</a>
             <a class="navbar-brand" href="/settings">Einstellungen</a>
         </div>
-        <span id="backend-connection-indicator" class="connection-indicator disconnected ms-auto" role="status" aria-live="polite" aria-label="Backend getrennt">
-            <span class="connection-indicator__dot" aria-hidden="true"></span>
-            <span class="connection-indicator__label">Backend</span>
-            <span class="connection-indicator__status" data-role="status-text">Getrennt</span>
-        </span>
     </div>
 </nav>
+<div id="backend-indicator-container" class="connection-indicator-container">
+    <span id="backend-connection-indicator" class="connection-indicator disconnected" role="status" aria-live="polite" aria-label="Backend getrennt">
+        <span class="connection-indicator__dot" aria-hidden="true"></span>
+        <span class="connection-indicator__label">Backend</span>
+        <span class="connection-indicator__host" data-role="host">{{ backend_host or '—' }}</span>
+        <span class="connection-indicator__status" data-role="status-text">Getrennt</span>
+    </span>
+</div>
 <div class="{% block container_class %}container{% endblock %}">
     {% block content %}{% endblock %}
 </div>
@@ -36,6 +39,7 @@
         return;
     }
     const statusTextEl = indicator.querySelector('[data-role="status-text"]');
+    const hostEl = indicator.querySelector('[data-role="host"]');
     const dotEl = indicator.querySelector('.connection-indicator__dot');
     let pollTimer = null;
     let lastState = null;
@@ -80,6 +84,9 @@
 
     applyState(false);
     schedulePoll(0);
+    if (hostEl && !hostEl.textContent.trim()) {
+        hostEl.textContent = window.location.hostname || '—';
+    }
 })();
 </script>
 {% block scripts %}{% endblock %}
