@@ -56,6 +56,8 @@ DATA_FILE = Path('data/vehicles.json')
 INCIDENT_FILE = Path('data/incidents.json')
 TEMPLATE_FILE = Path('data/templates.json')
 PRIORITY_FILE = Path('data/priorities.json')
+ANNOUNCEMENTS_FILE = Path('data/announcements.json')
+MAX_ANNOUNCEMENTS = 100
 DEFAULT_VEHICLES = {
     'RTW1': {
         'name': 'Rettungswagen 1',
@@ -289,10 +291,60 @@ def save_priorities():
     notify_change()
 
 
+def load_announcements():
+    if ANNOUNCEMENTS_FILE.exists():
+        try:
+            with open(ANNOUNCEMENTS_FILE, encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    cleaned = []
+                    for entry in data:
+                        if not isinstance(entry, dict):
+                            continue
+                        text = (entry.get('text') or '').strip()
+                        if not text:
+                            continue
+                        cleaned.append(
+                            {
+                                'id': entry.get('id') or 0,
+                                'time': entry.get('time') or now_local_iso(),
+                                'text': text,
+                            }
+                        )
+                    return cleaned
+        except json.JSONDecodeError:
+            pass
+    return []
+
+
+def save_announcements():
+    ANNOUNCEMENTS_FILE.parent.mkdir(exist_ok=True)
+    with open(ANNOUNCEMENTS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(announcements, f, ensure_ascii=False, indent=2)
+    notify_change()
+
+
+def update_vehicle_incident_details(unit, incident, *, newly_assigned=False):
+    info = vehicles.get(unit)
+    if not info or not incident:
+        return
+    incident = normalise_incident(dict(incident))
+    info['incident_id'] = incident.get('id')
+    info['note'] = incident.get('keyword') or ''
+    loc = incident.get('location') or {}
+    info['location'] = loc.get('name') or ''
+    info['lat'] = loc.get('lat')
+    info['lon'] = loc.get('lon')
+    info['priority'] = incident.get('priority') or ''
+    if newly_assigned:
+        info['alarm_time'] = None
+
+
 vehicles = load_vehicles()
 incidents = load_incidents()
 templates = load_templates()
 priorities = load_priorities()
+announcements = load_announcements()
 
 listeners = []
 
@@ -664,6 +716,29 @@ def api_save_priorities():
     return jsonify({'ok': True, 'priorities': priorities})
 
 
+@app.route('/api/announcements', methods=['GET'])
+def api_list_announcements():
+    return jsonify(announcements)
+
+
+@app.route('/api/announcements', methods=['POST'])
+def api_create_announcement():
+    data = request.json or {}
+    text = (data.get('text') or '').strip()
+    if not text:
+        return jsonify({'ok': False, 'error': 'Text erforderlich'}), 400
+    entry = {
+        'id': int(datetime.now().timestamp() * 1000),
+        'time': now_local_iso(),
+        'text': text,
+    }
+    announcements.append(entry)
+    if len(announcements) > MAX_ANNOUNCEMENTS:
+        announcements[:] = announcements[-MAX_ANNOUNCEMENTS:]
+    save_announcements()
+    return jsonify({'ok': True, 'announcement': entry})
+
+
 @app.route('/api/incidents', methods=['POST'])
 def api_create_incident():
     data = request.json or {}
@@ -700,6 +775,10 @@ def api_create_incident():
     for unit in vehicles_req:
         incident['log'].append({'time': now, 'unit': unit, 'status': 'zugeteilt'})
     incidents.append(incident)
+    if vehicles_req:
+        for unit in vehicles_req:
+            update_vehicle_incident_details(unit, incident, newly_assigned=True)
+        save_vehicles()
     save_incidents()
     return jsonify({'ok': True, 'id': incident['id']})
 
@@ -859,12 +938,29 @@ def api_update_incident(inc_id):
                 inc['priority'] = priority
             if patient is not None:
                 inc['patient'] = patient
+            vehicles_updated = False
+            removal_error = None
             if vehicles_req is not None:
-                old_units = set(inc.get('vehicles', []))
-                new_units = set(vehicles_req)
-                added = new_units - old_units
-                removed = old_units - new_units
-                inc['vehicles'] = list(new_units)
+                existing_units = list(inc.get('vehicles', []))
+                existing_set = set(existing_units)
+                requested_units = list(dict.fromkeys(vehicles_req))
+                requested_set = set(requested_units)
+                added = [unit for unit in requested_units if unit not in existing_set]
+                removed = [unit for unit in existing_units if unit not in requested_set]
+                blocked = []
+                allowed_removed = []
+                for unit in removed:
+                    info = vehicles.get(unit)
+                    status = info.get('status') if info else None
+                    if not inc.get('active') or status in {1, 2}:
+                        allowed_removed.append(unit)
+                    else:
+                        blocked.append(unit)
+                final_units = requested_units[:]
+                for unit in blocked:
+                    if unit not in final_units:
+                        final_units.append(unit)
+                inc['vehicles'] = final_units
                 now = now_local_iso()
                 for unit in added:
                     inc.setdefault('log', []).append({
@@ -872,7 +968,7 @@ def api_update_incident(inc_id):
                         'unit': unit,
                         'status': 'zugeteilt',
                     })
-                for unit in removed:
+                for unit in allowed_removed:
                     inc.setdefault('log', []).append({
                         'time': now,
                         'unit': unit,
@@ -893,11 +989,31 @@ def api_update_incident(inc_id):
                             info['lat'] = None
                             info['lon'] = None
                             info['priority'] = ''
+                for unit in inc.get('vehicles', []):
+                    update_vehicle_incident_details(
+                        unit,
+                        inc,
+                        newly_assigned=unit in added,
+                    )
                 save_vehicles()
+                vehicles_updated = True
                 finalise_incident_if_clear(inc)
+                if blocked:
+                    removal_error = {
+                        'ok': False,
+                        'error': 'Fahrzeuge können nur in Status 1 oder 2 entfernt werden.',
+                        'blocked': blocked,
+                    }
+            if not vehicles_updated and inc.get('vehicles'):
+                for unit in inc.get('vehicles', []):
+                    update_vehicle_incident_details(unit, inc)
+                save_vehicles()
+                vehicles_updated = True
             if note:
                 inc.setdefault('notes', []).append({'time': now_local_iso(), 'text': note})
             save_incidents()
+            if removal_error:
+                return jsonify(removal_error), 400
             return jsonify({'ok': True})
     return jsonify({'ok': False}), 404
 

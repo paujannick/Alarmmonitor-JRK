@@ -12,6 +12,22 @@
 
 <div class="alert alert-danger d-none" role="alert" id="dispatch-status-error"></div>
 
+<div class="dispatch-announcement card shadow-sm mb-5">
+  <div class="card-body">
+    <div class="d-flex flex-column flex-lg-row gap-3 align-items-stretch align-items-lg-end">
+      <div class="flex-grow-1">
+        <label class="form-label text-uppercase fw-semibold text-white-50 small" for="announcement-text">Nur Durchsage</label>
+        <input type="text" class="form-control form-control-lg" id="announcement-text" placeholder="Text für die Durchsage eingeben">
+      </div>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-light" id="announcement-clear">Zurücksetzen</button>
+        <button type="button" class="btn btn-info btn-lg" id="announcement-send">Durchsage starten</button>
+      </div>
+    </div>
+    <p class="text-white-50 small mb-0 mt-3">Spielt den Gong und gibt die Nachricht mit „Achtung, eine Durchsage“ aus.</p>
+  </div>
+</div>
+
 <div class="vehicle-board-header mt-5 d-flex justify-content-between align-items-center">
   <h2 class="mb-0">Fahrzeugübersicht</h2>
   <button type="button" class="btn btn-outline-light btn-sm" id="vehicle-board-toggle" aria-expanded="true">
@@ -37,18 +53,7 @@
         <span class="meta-label">Ort</span>
         <span class="meta-value dispatch-location">{{ info.location or '—' }}</span>
       </div>
-      <div class="dispatch-meta mb-3">
-        <span class="meta-label">Stichwort</span>
-        <span class="meta-value dispatch-note">{{ info.note or '—' }}</span>
-      </div>
-      <div class="dispatch-meta mb-3">
-        <span class="meta-label">Priorität</span>
-        <span class="meta-value dispatch-priority">{{ info.priority or '—' }}</span>
-      </div>
-      <div class="dispatch-meta mb-4">
-        <span class="meta-label">Alarmiert</span>
-        <span class="meta-value dispatch-alarm" data-raw="{{ info.alarm_time or '' }}">{{ info.alarm_time or '—' }}</span>
-      </div>
+      <div class="spacer mb-4"></div>
       <div class="mb-3">
         <label class="form-label form-label-sm text-uppercase fw-semibold text-white-50" for="status-select-{{ loop.index }}">Status ändern</label>
         <select class="form-select form-select-sm status-select" id="status-select-{{ loop.index }}" data-unit="{{ name }}">
@@ -208,6 +213,12 @@
             <textarea name="note" id="incident-note" class="form-control" rows="3" placeholder="Zusätzliche Informationen oder Einsatznotizen"></textarea>
           </div>
         </form>
+        <div id="incident-note-history" class="incident-note-history mt-4">
+          <div class="section-header">
+            <span class="section-title">Notizverlauf</span>
+          </div>
+          <ol class="incident-note-history__list"></ol>
+        </div>
         <div class="alert alert-danger d-none" role="alert" id="incident-error"></div>
       </div>
       <div class="modal-footer border-0 pt-0">
@@ -233,6 +244,9 @@ const statusError = document.getElementById('dispatch-status-error');
 const boardContainer = document.getElementById('vehicle-board-container');
 const boardToggle = document.getElementById('vehicle-board-toggle');
 const incidentToolbarButton = document.getElementById('incident-new');
+const announcementInput = document.getElementById('announcement-text');
+const announcementSendBtn = document.getElementById('announcement-send');
+const announcementClearBtn = document.getElementById('announcement-clear');
 
 function normalizeStatusValue(value) {
   if (value === null || value === undefined) return value;
@@ -309,19 +323,6 @@ function updateDispatchCard(card, info) {
   if (locationEl) {
     locationEl.textContent = info.location || '—';
   }
-  const noteEl = card.querySelector('.dispatch-note');
-  if (noteEl) {
-    noteEl.textContent = info.note || '—';
-  }
-  const prioEl = card.querySelector('.dispatch-priority');
-  if (prioEl) {
-    prioEl.textContent = info.priority || '—';
-  }
-  const alarmEl = card.querySelector('.dispatch-alarm');
-  if (alarmEl) {
-    alarmEl.dataset.raw = info.alarm_time || '';
-    alarmEl.textContent = formatDateTime(info.alarm_time);
-  }
   const secondary = card.querySelector('.card-header small');
   if (secondary) {
     secondary.textContent = info.callsign || info.name || '';
@@ -373,18 +374,7 @@ function createDispatchCard(unit, info) {
         <span class="meta-label">Ort</span>
         <span class="meta-value dispatch-location"></span>
       </div>
-      <div class="dispatch-meta mb-3">
-        <span class="meta-label">Stichwort</span>
-        <span class="meta-value dispatch-note"></span>
-      </div>
-      <div class="dispatch-meta mb-3">
-        <span class="meta-label">Priorität</span>
-        <span class="meta-value dispatch-priority"></span>
-      </div>
-      <div class="dispatch-meta mb-4">
-        <span class="meta-label">Alarmiert</span>
-        <span class="meta-value dispatch-alarm" data-raw=""></span>
-      </div>
+      <div class="spacer mb-4"></div>
       <div class="mb-3">
         <label class="form-label form-label-sm text-uppercase fw-semibold text-white-50">Status ändern</label>
         <select class="form-select form-select-sm status-select" data-unit="${unit}">
@@ -462,6 +452,34 @@ async function refreshVehicles() {
   } catch (err) {
     showStatusError(err.message || 'Fahrzeugdaten konnten nicht geladen werden.');
     throw err;
+  }
+}
+
+async function sendAnnouncement() {
+  if (!announcementInput || !announcementSendBtn) return;
+  const text = announcementInput.value.trim();
+  if (!text) {
+    showStatusError('Bitte einen Text für die Durchsage eingeben.');
+    return;
+  }
+  hideStatusError();
+  announcementSendBtn.disabled = true;
+  try {
+    const response = await fetch('/api/announcements', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) {
+      const message = data?.error || 'Durchsage konnte nicht gesendet werden.';
+      throw new Error(message);
+    }
+    announcementInput.value = '';
+  } catch (err) {
+    showStatusError(err.message || 'Durchsage konnte nicht gesendet werden.');
+  } finally {
+    announcementSendBtn.disabled = false;
   }
 }
 
@@ -635,6 +653,39 @@ function fillIncidentModal(inc) {
     incidentEndBtn.dataset.incidentId = canEnd ? inc.id : '';
     incidentEndBtn.disabled = !canEnd;
   }
+  const historyContainer = document.getElementById('incident-note-history');
+  if (historyContainer) {
+    const list = historyContainer.querySelector('.incident-note-history__list');
+    if (list) {
+      list.innerHTML = '';
+      const notes = Array.isArray(inc.notes) ? inc.notes.slice() : [];
+      notes.sort((a, b) => {
+        const aTime = (a && a.time) || '';
+        const bTime = (b && b.time) || '';
+        return aTime.localeCompare(bTime);
+      });
+      if (!notes.length) {
+        const empty = document.createElement('li');
+        empty.className = 'incident-note-history__empty';
+        empty.textContent = 'Noch keine Notizen vorhanden.';
+        list.appendChild(empty);
+      } else {
+        notes.forEach(noteEntry => {
+          const li = document.createElement('li');
+          li.className = 'incident-note-history__item';
+          const timeSpan = document.createElement('span');
+          timeSpan.className = 'incident-note-history__time';
+          timeSpan.textContent = formatDateTime(noteEntry.time) || '';
+          const textSpan = document.createElement('span');
+          textSpan.className = 'incident-note-history__text';
+          textSpan.textContent = noteEntry.text || '';
+          li.appendChild(timeSpan);
+          li.appendChild(textSpan);
+          list.appendChild(li);
+        });
+      }
+    }
+  }
 }
 async function fetchIncident(id) {
   const response = await fetch(`/api/incidents/${id}`);
@@ -659,6 +710,31 @@ if (incidentToolbarButton) {
   incidentToolbarButton.addEventListener('click', () => {
     fillIncidentModal({});
     incidentModal.show();
+  });
+}
+
+if (announcementSendBtn) {
+  announcementSendBtn.addEventListener('click', () => {
+    sendAnnouncement();
+  });
+}
+
+if (announcementInput) {
+  announcementInput.addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      sendAnnouncement();
+    }
+  });
+}
+
+if (announcementClearBtn) {
+  announcementClearBtn.addEventListener('click', () => {
+    if (announcementInput) {
+      announcementInput.value = '';
+      announcementInput.focus();
+    }
+    hideStatusError();
   });
 }
 document.querySelectorAll('#incident-list .edit').forEach(btn => {
@@ -695,6 +771,8 @@ document.getElementById('incident-save').addEventListener('click', async () => {
   if (note) payload.note = note;
   const url = id ? `/api/incidents/${id}` : '/api/incidents';
   const method = id ? 'PUT' : 'POST';
+  incidentError.classList.add('d-none');
+  incidentError.textContent = '';
   pauseAutoReload();
   let success = false;
   try {
@@ -703,8 +781,8 @@ document.getElementById('incident-save').addEventListener('click', async () => {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(payload)
     });
-    const r = await res.json();
-    if (r.ok) {
+    const r = await res.json().catch(() => ({}));
+    if (res.ok && r.ok) {
       success = true;
       incidentModal.hide();
       try {
@@ -712,9 +790,15 @@ document.getElementById('incident-save').addEventListener('click', async () => {
       } catch (err) {
         console.error(err);
       }
+    } else {
+      const message = r?.error || 'Einsatz konnte nicht gespeichert werden.';
+      incidentError.textContent = message;
+      incidentError.classList.remove('d-none');
     }
   } catch (err) {
     console.error(err);
+    incidentError.textContent = err?.message || 'Einsatz konnte nicht gespeichert werden.';
+    incidentError.classList.remove('d-none');
   } finally {
     resumeAutoReload(success, { clearPending: !success });
   }
@@ -793,8 +877,10 @@ document.getElementById('incident-alert').addEventListener('click', async () => 
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(details)
       });
-      if (!updateRes.ok) {
-        throw new Error('update');
+      const updateData = await updateRes.json().catch(() => ({}));
+      if (!updateRes.ok || updateData.ok === false) {
+        const message = updateData?.error || 'Einsatz konnte nicht aktualisiert werden.';
+        throw new Error(message);
       }
     } else {
       const res = await fetch('/api/incidents', {
@@ -804,7 +890,8 @@ document.getElementById('incident-alert').addEventListener('click', async () => 
       });
       const r = await res.json().catch(() => ({}));
       if (!res.ok || !r.ok) {
-        throw new Error('create');
+        const message = r?.error || 'Einsatz konnte nicht angelegt werden.';
+        throw new Error(message);
       }
       id = r.id;
       f.elements['id'].value = id;
@@ -817,7 +904,8 @@ document.getElementById('incident-alert').addEventListener('click', async () => 
     });
     const alertData = await alertRes.json().catch(() => ({}));
     if (!alertRes.ok || !alertData.ok) {
-      throw new Error('alert');
+      const message = alertData?.error || 'Alarmierung fehlgeschlagen. Bitte erneut versuchen.';
+      throw new Error(message);
     }
     success = true;
     incidentModal.hide();
@@ -828,15 +916,7 @@ document.getElementById('incident-alert').addEventListener('click', async () => 
     }
   } catch (err) {
     console.error(err);
-    let message = 'Alarmierung fehlgeschlagen. Bitte erneut versuchen.';
-    if (err instanceof Error) {
-      if (err.message === 'update') {
-        message = 'Einsatz konnte nicht aktualisiert werden.';
-      } else if (err.message === 'create') {
-        message = 'Einsatz konnte nicht angelegt werden.';
-      }
-    }
-    incidentError.textContent = message;
+    incidentError.textContent = err?.message || 'Alarmierung fehlgeschlagen. Bitte erneut versuchen.';
     incidentError.classList.remove('d-none');
     alertBtn.disabled = false;
   } finally {
