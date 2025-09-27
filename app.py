@@ -355,28 +355,22 @@ def notify_change():
 
 
 def finalise_incident_if_clear(incident):
-    """Automatically end incidents once all assigned units are free."""
+    """Check whether an incident has any bound vehicles without ending it.
+
+    Incidents previously ended automatically once every assigned vehicle was
+    back in status 1 or 2. This implicit behaviour hid the "Einsatz beenden"
+    button after a save operation because the incident switched to inactive.
+    The function now simply reports whether all assigned vehicles are free and
+    leaves the incident active so that it can be closed explicitly via the UI.
+    """
 
     if not incident or not incident.get('active'):
         return False
     incident = normalise_incident(incident)
-    remaining = [
-        unit
+    return all(
+        (vehicles.get(unit) or {}).get('status', 2) in (1, 2)
         for unit in incident.get('vehicles', [])
-        if (vehicles.get(unit) or {}).get('status', 2) not in (1, 2)
-    ]
-    if remaining:
-        return False
-    incident['active'] = False
-    incident['end'] = now_local_iso()
-    incident.setdefault('log', []).append(
-        {
-            'time': now_local_iso(),
-            'unit': 'SYSTEM',
-            'status': 'automatisch beendet',
-        }
     )
-    return True
 
 
 def event_stream():
@@ -510,7 +504,7 @@ def api_dispatch():
                 info['location'] = ''
                 info['lat'] = None
                 info['lon'] = None
-            ended = False
+            incident_cleared = False
             if active_inc and unit in active_inc.get('vehicles', []):
                 active_inc['vehicles'].remove(unit)
                 active_inc.setdefault('log', []).append({
@@ -518,10 +512,14 @@ def api_dispatch():
                     'unit': unit,
                     'status': status,
                 })
-                ended = finalise_incident_if_clear(active_inc)
+                incident_cleared = finalise_incident_if_clear(active_inc)
             save_vehicles()
             save_incidents()
-            return jsonify({'ok': True, 'incidentEnded': ended})
+            ended = bool(active_inc and not active_inc.get('active'))
+            response = {'ok': True, 'incidentEnded': ended}
+            if incident_cleared and not ended:
+                response['incidentClear'] = True
+            return jsonify(response)
         info['status'] = status
         if note is not None or location is not None or lat is not None or lon is not None:
             if not active:
