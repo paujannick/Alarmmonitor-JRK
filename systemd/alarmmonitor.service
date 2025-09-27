@@ -1,0 +1,18 @@
+# Passe die Pfade, den Benutzer und die Gruppe an deine Umgebung an.
+[Unit]
+Description=Alarmmonitor JRK
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/alarmmonitor
+ExecStart=/usr/bin/env bash /opt/alarmmonitor/start.sh
+Restart=always
+RestartSec=5
+Environment=FLASK_ENV=production
+User=pi
+Group=pi
+
+[Install]
+WantedBy=multi-user.target

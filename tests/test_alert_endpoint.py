@@ -18,24 +18,28 @@ def setup_app():
     return app, app.app.test_client()
 
 
-def test_realert_same_incident_updates_log_and_vehicle():
+def test_realert_same_incident_is_ignored():
     app, client = setup_app()
     resp = client.post('/api/incidents', json={'keyword': 'Test', 'location': 'Loc'})
     inc_id = resp.get_json()['id']
 
     # first alert assigns vehicle
-    client.post(f'/api/incidents/{inc_id}/alert', json={'units': ['RTW1']})
+    data_first = client.post(f'/api/incidents/{inc_id}/alert', json={'units': ['RTW1']}).get_json()
+    assert data_first['alerted'] == ['RTW1']
+    assert not data_first['already_alerted']
     first_alarm = app.vehicles['RTW1']['alarm_time']
     inc = next(i for i in app.incidents if i['id'] == inc_id)
     assert [e for e in inc['log'] if e['unit'] == 'RTW1' and e['status'] == 'alarmiert']
 
-    # re-alert should add another log entry and update alarm timestamp
+    # re-alert should not duplicate log entries or change timestamps
     time.sleep(0.01)
-    client.post(f'/api/incidents/{inc_id}/alert', json={'units': ['RTW1']})
+    data_second = client.post(f'/api/incidents/{inc_id}/alert', json={'units': ['RTW1']}).get_json()
     inc = next(i for i in app.incidents if i['id'] == inc_id)
     log_entries = [e for e in inc['log'] if e['unit'] == 'RTW1' and e['status'] == 'alarmiert']
-    assert len(log_entries) == 2
-    assert app.vehicles['RTW1']['alarm_time'] != first_alarm
+    assert len(log_entries) == 1
+    assert app.vehicles['RTW1']['alarm_time'] == first_alarm
+    assert data_second['alerted'] == []
+    assert 'RTW1' in data_second['already_alerted']
 
 
 def test_alert_skips_vehicle_in_other_active_incident():

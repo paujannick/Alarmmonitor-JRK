@@ -64,6 +64,15 @@
         </table>
       </div>
     </section>
+    <section class="monitor-incidents" aria-label="Aktive Einsätze">
+      <div class="monitor-incidents-header">
+        <div>
+          <h2 class="mb-1">Aktive Einsätze</h2>
+          <p class="mb-0 text-white-50" id="active-incident-summary">Keine aktiven Einsätze</p>
+        </div>
+      </div>
+      <div class="monitor-incidents-body" id="active-incident-list" role="list"></div>
+    </section>
   </main>
 </div>
 <audio id="alarm" preload="auto">
@@ -102,10 +111,33 @@ const map = L.map('map').setView([50.517, 8.816], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '© OpenStreetMap'}).addTo(map);
 const vehicleMarkers = {};
 const incidentMarkers = {};
+const incidentListEl = document.getElementById('active-incident-list');
+const incidentSummaryEl = document.getElementById('active-incident-summary');
 const tableContainer = document.getElementById('vehicle-table-container');
 const vehicleTableEl = document.getElementById('vehicle-table');
 let vehicleTableBaseFontSize = null;
 let pendingTableResize = false;
+
+function formatDateTime(value, options = {}) {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    const base = {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    };
+    return date.toLocaleString('de-DE', { ...base, ...options });
+}
+
+function formatTime(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+}
 
 function ensureVehicleTableBaseFontSize() {
     if (!vehicleTableEl) return null;
@@ -195,6 +227,135 @@ function computeAlarmId(unit, info) {
     const uniqueId = info.alarm_time || info.incident_id || Date.now();
     return `${unit}:${uniqueId}`;
 }
+
+function renderActiveIncidents(incidents) {
+    if (!incidentListEl) return;
+    const container = incidentListEl;
+    container.innerHTML = '';
+    const active = Array.isArray(incidents)
+        ? incidents.filter(inc => inc && inc.active)
+        : [];
+    if (!active.length) {
+        const empty = document.createElement('div');
+        empty.className = 'monitor-incident-empty';
+        empty.textContent = 'Keine aktiven Einsätze';
+        container.appendChild(empty);
+        if (incidentSummaryEl) {
+            incidentSummaryEl.textContent = 'Keine aktiven Einsätze';
+        }
+        return;
+    }
+    const sorted = active
+        .slice()
+        .sort((a, b) => {
+            const aStart = a?.start || '';
+            const bStart = b?.start || '';
+            return bStart.localeCompare(aStart);
+        });
+    sorted.forEach(inc => {
+        const card = document.createElement('article');
+        card.className = 'monitor-incident-card';
+        card.setAttribute('role', 'listitem');
+
+        const header = document.createElement('header');
+        header.className = 'monitor-incident-card__header';
+
+        const headerInfo = document.createElement('div');
+        const idSpan = document.createElement('span');
+        idSpan.className = 'monitor-incident-id';
+        idSpan.textContent = `#${inc.id}`;
+        headerInfo.appendChild(idSpan);
+
+        const title = document.createElement('h3');
+        title.textContent = inc.keyword || 'Einsatz';
+        headerInfo.appendChild(title);
+
+        const location = document.createElement('p');
+        location.className = 'monitor-incident-location';
+        const loc = inc.location || {};
+        location.textContent = loc.name || '—';
+        headerInfo.appendChild(location);
+
+        const meta = document.createElement('div');
+        meta.className = 'monitor-incident-meta';
+
+        const priority = document.createElement('span');
+        priority.className = 'monitor-incident-priority';
+        priority.textContent = inc.priority || '—';
+        meta.appendChild(priority);
+
+        const start = document.createElement('span');
+        start.className = 'monitor-incident-start';
+        start.textContent = formatDateTime(inc.start);
+        meta.appendChild(start);
+
+        header.appendChild(headerInfo);
+        header.appendChild(meta);
+        card.appendChild(header);
+
+        const unitList = document.createElement('ul');
+        unitList.className = 'monitor-incident-unit-list';
+        const assigned = Array.isArray(inc.vehicles) ? inc.vehicles : [];
+        if (assigned.length) {
+            assigned.forEach(unit => {
+                const li = document.createElement('li');
+                li.className = 'monitor-incident-unit';
+                const info = vehicleData[unit];
+                const statusCode = info && info.status !== undefined ? Number(info.status) : null;
+                const statusKey = statusCode !== null && !Number.isNaN(statusCode) ? String(statusCode) : null;
+                if (statusKey) {
+                    li.classList.add(`status-${statusKey}`);
+                } else {
+                    li.classList.add('status-unknown');
+                }
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'unit-name';
+                nameSpan.textContent = unit;
+                const statusSpan = document.createElement('span');
+                statusSpan.className = 'unit-status';
+                if (statusKey && statusText[statusKey]) {
+                    statusSpan.textContent = `Status ${statusKey} – ${statusText[statusKey]}`;
+                } else if (statusCode !== null && !Number.isNaN(statusCode)) {
+                    statusSpan.textContent = `Status ${statusCode}`;
+                } else {
+                    statusSpan.textContent = 'Status unbekannt';
+                }
+                li.appendChild(nameSpan);
+                li.appendChild(statusSpan);
+                unitList.appendChild(li);
+            });
+        } else {
+            const li = document.createElement('li');
+            li.className = 'monitor-incident-unit status-unknown';
+            li.textContent = 'Keine Fahrzeuge zugeordnet';
+            unitList.appendChild(li);
+        }
+        card.appendChild(unitList);
+
+        const lastNote = inc.notes && inc.notes.length ? inc.notes[inc.notes.length - 1] : null;
+        if (lastNote && lastNote.text) {
+            const note = document.createElement('p');
+            note.className = 'monitor-incident-note';
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'note-time';
+            timeSpan.textContent = formatTime(lastNote.time);
+            const textSpan = document.createElement('span');
+            textSpan.className = 'note-text';
+            textSpan.textContent = lastNote.text;
+            note.appendChild(timeSpan);
+            note.appendChild(textSpan);
+            card.appendChild(note);
+        }
+
+        container.appendChild(card);
+    });
+    if (incidentSummaryEl) {
+        incidentSummaryEl.textContent = active.length === 1
+            ? '1 aktiver Einsatz'
+            : `${active.length} aktive Einsätze`;
+    }
+}
+
 function unlockAudio() {
     alarmSound.play().then(() => {
         alarmSound.pause();
@@ -511,6 +672,7 @@ async function refresh() {
                 delete incidentMarkers[inc.id];
             }
         }
+        renderActiveIncidents(incs);
     adjustVehicleTableSize();
     fitMapToAll();
     } catch (err) {
@@ -524,22 +686,9 @@ async function refresh() {
         }
     }
 }
-const connectionStatusEl = document.createElement('div');
-connectionStatusEl.id = 'connection-status';
-connectionStatusEl.className = 'badge bg-danger position-fixed top-0 end-0 m-3 fs-6';
-connectionStatusEl.textContent = 'Getrennt';
-connectionStatusEl.style.zIndex = '2000';
-document.body.appendChild(connectionStatusEl);
-
 function setConnectionStatus(connected) {
-    if (connected) {
-        connectionStatusEl.classList.remove('bg-danger');
-        connectionStatusEl.classList.add('bg-success');
-        connectionStatusEl.textContent = 'Verbunden';
-    } else {
-        connectionStatusEl.classList.remove('bg-success');
-        connectionStatusEl.classList.add('bg-danger');
-        connectionStatusEl.textContent = 'Verbindung getrennt';
+    if (typeof window.__setBackendConnected === 'function') {
+        window.__setBackendConnected(Boolean(connected));
     }
 }
 

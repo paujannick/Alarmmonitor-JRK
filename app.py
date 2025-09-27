@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify, Response, send_file
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib import parse, request as urlrequest
 from queue import Queue, Empty
 import logging
@@ -9,6 +9,36 @@ import functools
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
+
+
+def now_local_iso():
+    """Return the current local time as ISO 8601 string with timezone info."""
+
+    return datetime.now().astimezone().isoformat()
+
+
+def to_local_datetime(value):
+    """Parse an ISO timestamp and convert it to the local timezone."""
+
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone()
+
+
+def format_local(value, fmt='%d.%m.%Y %H:%M:%S'):
+    dt = to_local_datetime(value)
+    if not dt:
+        return value or ''
+    return dt.strftime(fmt)
+
+
+app.jinja_env.filters['format_local'] = format_local
 
 LOG_FILE = Path('app.log')
 LOG_FILE.touch(exist_ok=True)
@@ -272,6 +302,31 @@ def notify_change():
         q.put('update')
 
 
+def finalise_incident_if_clear(incident):
+    """Automatically end incidents once all assigned units are free."""
+
+    if not incident or not incident.get('active'):
+        return False
+    incident = normalise_incident(incident)
+    remaining = [
+        unit
+        for unit in incident.get('vehicles', [])
+        if (vehicles.get(unit) or {}).get('status', 2) not in (1, 2)
+    ]
+    if remaining:
+        return False
+    incident['active'] = False
+    incident['end'] = now_local_iso()
+    incident.setdefault('log', []).append(
+        {
+            'time': now_local_iso(),
+            'unit': 'SYSTEM',
+            'status': 'automatisch beendet',
+        }
+    )
+    return True
+
+
 def event_stream():
     q = Queue()
     listeners.append(q)
@@ -403,16 +458,18 @@ def api_dispatch():
                 info['location'] = ''
                 info['lat'] = None
                 info['lon'] = None
+            ended = False
             if active_inc and unit in active_inc.get('vehicles', []):
                 active_inc['vehicles'].remove(unit)
                 active_inc.setdefault('log', []).append({
-                    'time': datetime.utcnow().isoformat(),
+                    'time': now_local_iso(),
                     'unit': unit,
                     'status': status,
                 })
+                ended = finalise_incident_if_clear(active_inc)
             save_vehicles()
             save_incidents()
-            return jsonify({'ok': True})
+            return jsonify({'ok': True, 'incidentEnded': ended})
         info['status'] = status
         if note is not None or location is not None or lat is not None or lon is not None:
             if not active:
@@ -443,10 +500,11 @@ def api_dispatch():
         for inc in incidents:
             if inc.get('active') and unit in inc.get('vehicles', []):
                 inc.setdefault('log', []).append({
-                    'time': datetime.utcnow().isoformat(),
+                    'time': now_local_iso(),
                     'unit': unit,
                     'status': status,
                 })
+                finalise_incident_if_clear(inc)
         save_vehicles()
         save_incidents()
         return jsonify({'ok': True})
@@ -621,7 +679,7 @@ def api_create_incident():
         lat, lon = geocode(location)
     incident = {
         'id': len(incidents) + 1,
-        'start': datetime.utcnow().isoformat(),
+        'start': now_local_iso(),
         'end': None,
         'vehicles': list(vehicles_req),
         'keyword': keyword,
@@ -636,7 +694,7 @@ def api_create_incident():
         'priority': priority,
         'patient': patient,
     }
-    now = datetime.utcnow().isoformat()
+    now = now_local_iso()
     if note:
         incident['notes'].append({'time': now, 'text': note})
     for unit in vehicles_req:
@@ -653,7 +711,7 @@ def api_add_note(inc_id):
     if text:
         for inc in incidents:
             if inc['id'] == inc_id and inc.get('active'):
-                inc['notes'].append({'time': datetime.utcnow().isoformat(), 'text': text})
+                inc['notes'].append({'time': now_local_iso(), 'text': text})
                 save_incidents()
                 return jsonify({'ok': True})
     return jsonify({'ok': False}), 404
@@ -664,7 +722,7 @@ def api_end_incident(inc_id):
     for inc in incidents:
         if inc['id'] == inc_id and inc.get('active'):
             inc['active'] = False
-            inc['end'] = datetime.utcnow().isoformat()
+            inc['end'] = now_local_iso()
             for unit in inc.get('vehicles', []):
                 if unit in vehicles:
                     if not any(
@@ -714,6 +772,7 @@ def api_alert_incident(inc_id):
             inc = normalise_incident(inc)
             alerted = []
             skipped = []
+            already = []
             for unit in units:
                 # Skip vehicles that are already bound to another active incident
                 if any(
@@ -723,10 +782,20 @@ def api_alert_incident(inc_id):
                 ):
                     skipped.append(unit)
                     continue
+                info = vehicles.get(unit)
+                already_assigned = unit in inc['vehicles']
+                already_active = (
+                    already_assigned
+                    and info is not None
+                    and info.get('incident_id') == inc_id
+                )
+                if already_active:
+                    already.append(unit)
+                    continue
                 # Add the vehicle to this incident if not already present
-                if unit not in inc['vehicles']:
+                if not already_assigned:
                     inc['vehicles'].append(unit)
-                now = datetime.utcnow().isoformat()
+                now = now_local_iso()
                 # Log the alarm time for the incident
                 inc.setdefault('log', []).append({
                     'time': now,
@@ -746,7 +815,14 @@ def api_alert_incident(inc_id):
                 alerted.append(unit)
             save_incidents()
             save_vehicles()
-            return jsonify({'ok': True, 'alerted': alerted, 'skipped': skipped})
+            return jsonify(
+                {
+                    'ok': True,
+                    'alerted': alerted,
+                    'skipped': skipped,
+                    'already_alerted': already,
+                }
+            )
     return jsonify({'ok': False}), 404
 
 
@@ -789,7 +865,7 @@ def api_update_incident(inc_id):
                 added = new_units - old_units
                 removed = old_units - new_units
                 inc['vehicles'] = list(new_units)
-                now = datetime.utcnow().isoformat()
+                now = now_local_iso()
                 for unit in added:
                     inc.setdefault('log', []).append({
                         'time': now,
@@ -818,8 +894,9 @@ def api_update_incident(inc_id):
                             info['lon'] = None
                             info['priority'] = ''
                 save_vehicles()
+                finalise_incident_if_clear(inc)
             if note:
-                inc.setdefault('notes', []).append({'time': datetime.utcnow().isoformat(), 'text': note})
+                inc.setdefault('notes', []).append({'time': now_local_iso(), 'text': note})
             save_incidents()
             return jsonify({'ok': True})
     return jsonify({'ok': False}), 404
@@ -839,6 +916,11 @@ def settings():
 @app.route('/download-log')
 def download_log():
     return send_file(LOG_FILE, as_attachment=True)
+
+
+@app.route('/api/health')
+def api_health():
+    return jsonify({'ok': True, 'time': now_local_iso()})
 
 
 def log_request_and_errors(func):
