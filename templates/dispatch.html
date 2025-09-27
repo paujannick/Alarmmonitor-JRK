@@ -212,7 +212,15 @@
             <div class="row g-3">
               <div class="col-md-8">
                 <label class="form-label" for="incident-location">Ort / Adresse</label>
-                <input type="text" name="location" id="incident-location" class="form-control">
+                <div class="input-group">
+                  <input type="text" name="location" id="incident-location" class="form-control">
+                  <button type="button" class="btn btn-outline-light" id="incident-location-picker-inline" title="Einsatzort auf Karte auswählen">
+                    <span class="visually-hidden">Einsatzort auf Karte auswählen</span>
+                    <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                      <path d="M12 2a7 7 0 0 0-7 7c0 4.64 6.05 11.38 6.31 11.66a1 1 0 0 0 1.38 0C12.95 20.38 19 13.64 19 9a7 7 0 0 0-7-7Zm0 16.53C10.08 16.39 7 11.93 7 9a5 5 0 0 1 10 0c0 2.93-3.08 7.39-5 9.53ZM12 6a3 3 0 1 0 3 3 3 3 0 0 0-3-3Zm0 4a1 1 0 1 1 1-1 1 1 0 0 1-1 1Z"/>
+                    </svg>
+                  </button>
+                </div>
                 <input type="hidden" name="lat" id="incident-lat">
                 <input type="hidden" name="lon" id="incident-lon">
               </div>
@@ -283,6 +291,7 @@ const announcementInput = document.getElementById('announcement-text');
 const announcementSendBtn = document.getElementById('announcement-send');
 const announcementClearBtn = document.getElementById('announcement-clear');
 const locationPickerButton = document.getElementById('incident-location-picker-trigger');
+const locationPickerInlineButton = document.getElementById('incident-location-picker-inline');
 const locationPickerModalEl = document.getElementById('location-picker-modal');
 const locationPickerApply = document.getElementById('location-picker-apply');
 const locationPickerSelection = document.getElementById('location-picker-selection');
@@ -300,6 +309,38 @@ let locationPickerModal = null;
 let locationPickerLatLng = null;
 let locationPickerAddress = '';
 let locationPickerRequestId = 0;
+
+function escapeHtml(value) {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function createLocationPopupContent({ address, lat, lon }) {
+  const parts = [];
+  if (address) {
+    parts.push(`<div class="location-picker-popup__address">${escapeHtml(address)}</div>`);
+  }
+  if (Number.isFinite(lat) && Number.isFinite(lon)) {
+    parts.push(`<div class="location-picker-popup__coords">Koordinaten: ${lat.toFixed(5)}, ${lon.toFixed(5)}</div>`);
+  }
+  parts.push('<div class="mt-2"><button type="button" class="btn btn-primary btn-sm" data-role="apply-location">Standort übernehmen</button></div>');
+  return `<div class="location-picker-popup">${parts.join('')}</div>`;
+}
+
+function updateLocationPopup(lat, lon) {
+  if (!locationPickerMap || !locationPickerMarker) return;
+  const popupContent = createLocationPopupContent({
+    address: locationPickerAddress,
+    lat,
+    lon,
+  });
+  locationPickerMarker.bindPopup(popupContent, { closeButton: false }).openPopup();
+}
 
 function getOperationAreaDefaults() {
   const lat = Number(operationArea.lat);
@@ -325,6 +366,17 @@ function ensureLocationPickerMap() {
       maxBoundsViscosity: 0.75,
     }).setView([defaults.lat, defaults.lon], defaults.zoom);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(locationPickerMap);
+    locationPickerMap.on('popupopen', event => {
+      const popupEl = event.popup && event.popup.getElement();
+      if (!popupEl) return;
+      const applyBtn = popupEl.querySelector('[data-role="apply-location"]');
+      if (applyBtn) {
+        applyBtn.addEventListener('click', ev => {
+          ev.preventDefault();
+          applyLocationSelection();
+        });
+      }
+    });
     locationPickerMap.on('click', event => {
       setLocationMarker(event.latlng, { fetchAddress: true });
     });
@@ -360,6 +412,7 @@ async function fetchLocationAddress(lat, lon) {
     if (response.ok && data.ok) {
       locationPickerAddress = data.address || '';
       updateLocationSelectionDisplay({ address: locationPickerAddress, lat, lon });
+      updateLocationPopup(lat, lon);
       if (locationPickerStatus) {
         locationPickerStatus.textContent = LOCATION_STATUS_DEFAULT;
       }
@@ -368,13 +421,17 @@ async function fetchLocationAddress(lat, lon) {
       if (locationPickerStatus) {
         locationPickerStatus.textContent = (data && data.error) || 'Adresse konnte nicht ermittelt werden.';
       }
+      updateLocationPopup(lat, lon);
     }
   } catch (err) {
     console.error('Reverse Geocoding fehlgeschlagen', err);
-    if (requestId === locationPickerRequestId && locationPickerStatus) {
-      locationPickerStatus.textContent = 'Adresse nicht verfügbar.';
+    if (requestId === locationPickerRequestId) {
+      if (locationPickerStatus) {
+        locationPickerStatus.textContent = 'Adresse nicht verfügbar.';
+      }
+      locationPickerAddress = '';
+      updateLocationPopup(lat, lon);
     }
-    locationPickerAddress = '';
   }
 }
 
@@ -397,6 +454,7 @@ function setLocationMarker(latlng, options = {}) {
   if (locationPickerApply) {
     locationPickerApply.disabled = false;
   }
+  updateLocationPopup(latlng.lat, latlng.lng);
   if (fetchAddress) {
     fetchLocationAddress(latlng.lat, latlng.lng);
   } else if (locationPickerStatus) {
@@ -467,36 +525,46 @@ if (locationPickerModalEl) {
   });
 }
 
-if (locationPickerButton && locationPickerModalEl) {
-  locationPickerButton.addEventListener('click', () => {
-    ensureLocationPickerMap();
-    if (!locationPickerModal) {
-      locationPickerModal = new bootstrap.Modal(locationPickerModalEl);
-    }
-    locationPickerModal.show();
-  });
+function applyLocationSelection() {
+  if (!locationPickerLatLng) return;
+  const lat = locationPickerLatLng.lat;
+  const lon = locationPickerLatLng.lng;
+  if (incidentLocationInput) {
+    incidentLocationInput.value = locationPickerAddress || `Koordinaten ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+  }
+  if (incidentLatInput) {
+    incidentLatInput.value = lat.toFixed(6);
+  }
+  if (incidentLonInput) {
+    incidentLonInput.value = lon.toFixed(6);
+  }
+  if (locationPickerModal) {
+    locationPickerModal.hide();
+  }
+  if (incidentLocationInput) {
+    incidentLocationInput.focus();
+  }
 }
+
+function openLocationPicker() {
+  if (!locationPickerModalEl) return;
+  ensureLocationPickerMap();
+  if (!locationPickerModal) {
+    locationPickerModal = new bootstrap.Modal(locationPickerModalEl);
+  }
+  locationPickerModal.show();
+}
+
+[locationPickerButton, locationPickerInlineButton].forEach(button => {
+  if (!button) return;
+  button.addEventListener('click', () => {
+    openLocationPicker();
+  });
+});
 
 if (locationPickerApply) {
   locationPickerApply.addEventListener('click', () => {
-    if (!locationPickerLatLng) return;
-    const lat = locationPickerLatLng.lat;
-    const lon = locationPickerLatLng.lng;
-    if (incidentLocationInput) {
-      incidentLocationInput.value = locationPickerAddress || `Koordinaten ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-    }
-    if (incidentLatInput) {
-      incidentLatInput.value = lat.toFixed(6);
-    }
-    if (incidentLonInput) {
-      incidentLonInput.value = lon.toFixed(6);
-    }
-    if (locationPickerModal) {
-      locationPickerModal.hide();
-    }
-    if (incidentLocationInput) {
-      incidentLocationInput.focus();
-    }
+    applyLocationSelection();
   });
 }
 

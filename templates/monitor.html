@@ -25,6 +25,15 @@
     </div>
     <div class="monitor-meta">
       <div class="monitor-time text-end" id="datetime"></div>
+      <div class="monitor-controls">
+        <button id="enable-audio" class="btn btn-outline-light btn-sm">Ton aktivieren</button>
+        <button id="fullscreen" class="btn btn-outline-light btn-sm">Vollbild</button>
+      </div>
+    </div>
+  </header>
+  <main class="monitor-content">
+    {% if app_settings.monitor.show_weather %}
+    <section class="monitor-weather-card" aria-label="Wetter">
       <div class="monitor-weather" id="monitor-weather" aria-live="polite">
         <div class="monitor-weather__primary">
           <span class="monitor-weather__temp" data-role="weather-temp">--°C</span>
@@ -39,13 +48,8 @@
           <span class="monitor-weather__updated" data-role="weather-updated"></span>
         </div>
       </div>
-      <div class="monitor-controls">
-        <button id="enable-audio" class="btn btn-outline-light btn-sm">Ton aktivieren</button>
-        <button id="fullscreen" class="btn btn-outline-light btn-sm">Vollbild</button>
-      </div>
-    </div>
-  </header>
-  <main class="monitor-content">
+    </section>
+    {% endif %}
     <section class="monitor-map" aria-label="Karte">
       <div id="map" class="monitor-map-canvas"></div>
     </section>
