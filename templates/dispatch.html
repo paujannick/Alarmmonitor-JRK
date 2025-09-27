@@ -89,7 +89,7 @@
       {% for inc in incidents %}
         <tr data-id="{{ inc.id }}">
           <td>{{ inc.id }}</td>
-          <td>{{ inc.start }}</td>
+          <td>{{ inc.start|format_local }}</td>
           <td>{{ inc.vehicles|join(', ') }}</td>
           <td>{{ inc.location.name }}</td>
           <td>{{ inc.keyword }}</td>
@@ -97,14 +97,14 @@
           <td>
             <ul class="list-unstyled mb-0">
               {% for n in inc.notes %}
-              <li>{{ n.time }} - {{ n.text }}</li>
+              <li>{{ n.time|format_local }} - {{ n.text }}</li>
               {% endfor %}
             </ul>
           </td>
           <td>
             <ul class="list-unstyled mb-0">
               {% for l in inc.log or [] %}
-              <li>{{ l.time }} - {{ l.unit }}: {{ l.status if l.status is string else l.status ~ ' - ' ~ status_text[l.status] }}</li>
+              <li>{{ l.time|format_local }} - {{ l.unit }}: {{ l.status if l.status is string else l.status ~ ' - ' ~ status_text[l.status] }}</li>
               {% endfor %}
             </ul>
           </td>

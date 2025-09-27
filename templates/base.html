@@ -9,18 +9,79 @@
 </head>
 <body>
 <nav class="navbar navbar-dark bg-dark mb-4">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="/">Alarmmonitor</a>
-        <a class="navbar-brand" href="/dispatch">Leitstelle</a>
-        <a class="navbar-brand" href="/vehicle-status">Fahrzeugstatus</a>
-        <a class="navbar-brand" href="/vehicles">Fahrzeuge</a>
-        <a class="navbar-brand" href="/settings">Einstellungen</a>
+    <div class="container-fluid d-flex flex-wrap align-items-center gap-3">
+        <div class="d-flex flex-wrap align-items-center gap-3">
+            <a class="navbar-brand" href="/">Alarmmonitor</a>
+            <a class="navbar-brand" href="/dispatch">Leitstelle</a>
+            <a class="navbar-brand" href="/vehicle-status">Fahrzeugstatus</a>
+            <a class="navbar-brand" href="/vehicles">Fahrzeuge</a>
+            <a class="navbar-brand" href="/settings">Einstellungen</a>
+        </div>
+        <span id="backend-connection-indicator" class="connection-indicator disconnected ms-auto" role="status" aria-live="polite" aria-label="Backend getrennt">
+            <span class="connection-indicator__dot" aria-hidden="true"></span>
+            <span class="connection-indicator__label">Backend</span>
+            <span class="connection-indicator__status" data-role="status-text">Getrennt</span>
+        </span>
     </div>
 </nav>
 <div class="{% block container_class %}container{% endblock %}">
     {% block content %}{% endblock %}
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function() {
+    const indicator = document.getElementById('backend-connection-indicator');
+    if (!indicator) {
+        window.__setBackendConnected = () => {};
+        return;
+    }
+    const statusTextEl = indicator.querySelector('[data-role="status-text"]');
+    const dotEl = indicator.querySelector('.connection-indicator__dot');
+    let pollTimer = null;
+    let lastState = null;
+
+    function applyState(connected) {
+        const isConnected = Boolean(connected);
+        if (lastState === isConnected) return;
+        lastState = isConnected;
+        indicator.classList.toggle('connected', isConnected);
+        indicator.classList.toggle('disconnected', !isConnected);
+        if (statusTextEl) {
+            statusTextEl.textContent = isConnected ? 'Verbunden' : 'Getrennt';
+        }
+        indicator.setAttribute('aria-label', isConnected ? 'Backend verbunden' : 'Backend getrennt');
+        if (dotEl) {
+            dotEl.classList.toggle('opacity-50', !isConnected);
+        }
+    }
+
+    async function pingBackend() {
+        try {
+            const res = await fetch('/api/health', { cache: 'no-store' });
+            applyState(res.ok);
+            schedulePoll(res.ok ? 15000 : 5000);
+        } catch (err) {
+            applyState(false);
+            schedulePoll(5000);
+        }
+    }
+
+    function schedulePoll(delay) {
+        if (pollTimer) {
+            clearTimeout(pollTimer);
+        }
+        pollTimer = setTimeout(pingBackend, Math.max(1000, delay));
+    }
+
+    window.__setBackendConnected = function(state) {
+        applyState(state);
+        schedulePoll(state ? 15000 : 5000);
+    };
+
+    applyState(false);
+    schedulePoll(0);
+})();
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
