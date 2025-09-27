@@ -1259,8 +1259,8 @@ def api_weather():
     return jsonify(payload)
 
 
-@app.route('/settings')
-def settings():
+@app.route('/settings', endpoint='settings')
+def settings_page():
     return render_template(
         'settings.html',
         title='Einstellungen',
