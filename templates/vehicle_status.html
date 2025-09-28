@@ -2,27 +2,38 @@
 {% block container_class %}container-fluid{% endblock %}
 {% block content %}
 <h1 class="mb-4">Fahrzeugstatus</h1>
-<div id="vehicle-status-board" class="status-grid">
-  {% for name, info in vehicles.items() %}
-  <div class="card status-card" data-unit="{{ name }}">
-    <div class="card-header">
-      <h5 class="card-title mb-0">{{ name }}</h5>
-      <small class="text-muted">{{ info.callsign or info.name }}</small>
-    </div>
-    <div class="card-body">
-      <p class="current-status mb-3">
-        <span class="badge bg-primary">Status {{ info.status }} – {{ status_text[info.status] }}</span>
-      </p>
-      <div class="d-flex status-buttons">
-        {% for code, text in status_text.items() %}
-        <button type="button" class="btn btn-sm status-btn {% if code == info.status %}btn-primary{% else %}btn-outline-secondary{% endif %}" data-status="{{ code }}" title="{{ code }} - {{ text }}">
-          {{ code }}
-        </button>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-  {% endfor %}
+<div class="table-responsive">
+  <table class="table table-dark table-striped align-middle" id="vehicle-status-table">
+    <thead>
+      <tr>
+        <th scope="col">Fahrzeug</th>
+        <th scope="col">Status</th>
+        <th scope="col">Schnellwahl</th>
+      </tr>
+    </thead>
+    <tbody id="vehicle-status-board">
+    {% for name, info in vehicles.items() %}
+      <tr class="status-row" data-unit="{{ name }}">
+        <th scope="row">
+          <div class="fw-semibold">{{ name }}</div>
+          <div class="text-white-50 small vehicle-callsign">{{ info.callsign or info.name }}</div>
+        </th>
+        <td class="status-display">
+          <span class="badge bg-primary status-label">Status {{ info.status }} – {{ status_text[info.status] }}</span>
+        </td>
+        <td class="status-buttons">
+          <div class="btn-group btn-group-sm" role="group" aria-label="Status Schnellwahl">
+            {% for code, text in status_text.items() %}
+            <button type="button" class="btn btn-sm status-btn {% if code == info.status %}btn-primary{% else %}btn-outline-secondary{% endif %}" data-status="{{ code }}" title="{{ code }} - {{ text }}">
+              {{ code }}
+            </button>
+            {% endfor %}
+          </div>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
 </div>
 <div class="alert alert-danger d-none mt-3" role="alert" id="status-error"></div>
 {% endblock %}
@@ -35,11 +46,18 @@ function getStatusLabel(status) {
   return `Status ${status} – ${statusText[String(status)] || ''}`;
 }
 
-function updateCard(card, info) {
+function updateRow(row, info) {
+  if (!row || !info) return;
   const status = Number(info.status);
-  const badge = card.querySelector('.current-status .badge');
-  badge.textContent = getStatusLabel(status);
-  card.querySelectorAll('.status-btn').forEach(btn => {
+  const badge = row.querySelector('.status-label');
+  if (badge) {
+    badge.textContent = getStatusLabel(status);
+  }
+  const callsign = row.querySelector('.vehicle-callsign');
+  if (callsign) {
+    callsign.textContent = info.callsign || info.name || '';
+  }
+  row.querySelectorAll('.status-btn').forEach(btn => {
     const btnStatus = Number(btn.dataset.status);
     const isActive = btnStatus === status;
     btn.classList.toggle('btn-primary', isActive);
@@ -48,9 +66,11 @@ function updateCard(card, info) {
   });
 }
 
-async function sendStatus(unit, status, card) {
+async function sendStatus(unit, status, row) {
   try {
     statusError.classList.add('d-none');
+    const buttons = row ? Array.from(row.querySelectorAll('.status-btn')) : [];
+    buttons.forEach(btn => (btn.disabled = true));
     const response = await fetch('/api/dispatch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -64,8 +84,8 @@ async function sendStatus(unit, status, card) {
   } catch (err) {
     statusError.textContent = err.message || 'Status konnte nicht gesetzt werden';
     statusError.classList.remove('d-none');
-    if (card) {
-      card.querySelectorAll('.status-btn').forEach(btn => btn.disabled = false);
+    if (row) {
+      row.querySelectorAll('.status-btn').forEach(btn => (btn.disabled = false));
     }
   }
 }
@@ -80,10 +100,10 @@ async function refreshStatus() {
     });
     if (!response.ok) throw new Error('Konnte Fahrzeugdaten nicht laden');
     const data = await response.json();
-    document.querySelectorAll('.status-card').forEach(card => {
-      const unit = card.dataset.unit;
+    document.querySelectorAll('.status-row').forEach(row => {
+      const unit = row.dataset.unit;
       if (data[unit]) {
-        updateCard(card, data[unit]);
+        updateRow(row, data[unit]);
       }
     });
     statusError.classList.add('d-none');
@@ -95,14 +115,15 @@ async function refreshStatus() {
 }
 
 function setupHandlers() {
-  document.querySelectorAll('.status-card').forEach(card => {
-    card.addEventListener('click', event => {
+  document.querySelectorAll('.status-row').forEach(row => {
+    row.addEventListener('click', event => {
       const button = event.target.closest('.status-btn');
       if (!button || button.disabled) return;
-      const unit = card.dataset.unit;
+      const unit = row.dataset.unit;
       const status = Number(button.dataset.status);
-      card.querySelectorAll('.status-btn').forEach(btn => btn.disabled = true);
-      sendStatus(unit, status, card);
+      if (!unit || Number.isNaN(status)) return;
+      row.querySelectorAll('.status-btn').forEach(btn => (btn.disabled = true));
+      sendStatus(unit, status, row);
     });
   });
 }
