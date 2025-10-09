@@ -1,0 +1,17 @@
+[Unit]
+Description=Alarmmonitor Hotspot-Manager
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/alarmmonitor-network-manager.sh
+Restart=always
+RestartSec=5
+Environment=WIFI_INTERFACE=wlan0
+Environment=HOTSPOT_IP=10.20.0.1
+Environment=CHECK_INTERVAL=15
+Environment=HOTSPOT_PREFIX=24
+
+[Install]
+WantedBy=multi-user.target
