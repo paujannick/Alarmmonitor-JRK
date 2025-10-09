@@ -26,6 +26,26 @@ Die Audiodatei ist aus dem Repository ausgeschlossen. Lege eine passende
 ./install.sh
 ```
 
+### Hotspot & WLAN-Onboarding installieren
+
+Damit der Raspberry Pi bei fehlender WLAN-Verbindung automatisch einen
+konfigurierbaren Hotspot startet, steht ein erweitertes Setup-Skript zur
+Verfügung:
+
+```bash
+sudo ./install_hotspot.sh
+```
+
+Das Skript richtet `hostapd`, `dnsmasq`, den Hotspot-Manager und das
+WLAN-Konfigurationsportal ein. Standardwerte (SSID `Alarmmonitor-Setup`,
+Passwort `Alarmmonitor2024`, Interface `wlan0`) lassen sich über Umgebungsvariablen
+anpassen, z.&nbsp;B. `HOTSPOT_SSID`, `HOTSPOT_PASSWORD` oder `WIFI_INTERFACE`.
+Für das Portal wird automatisch ein zufälliger Session-Secret-Key erzeugt;
+über `PORTAL_PORT` lässt sich der Zugriffsport ändern.
+Nach erfolgreicher Installation versucht der Manager regelmäßig, sich mit bekannten
+Netzen zu verbinden und startet nur dann einen Hotspot, wenn keine Verbindung
+besteht.
+
 ## Start
 ```bash
 ./start.sh
