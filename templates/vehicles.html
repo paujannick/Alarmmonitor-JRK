@@ -1,184 +1,306 @@
 {% extends 'base.html' %}
 {% block content %}
-<h1 class="mb-4">Fahrzeugverwaltung</h1>
-<form id="add-vehicle" class="row g-3 mb-4">
-  <div class="col-md-3">
-    <label class="form-label" for="vehicle-unit">Kurzname</label>
-    <input type="text" name="unit" id="vehicle-unit" class="form-control" required>
+<div class="page-header d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+  <div>
+    <h1 class="mb-1">Fahrzeugverwaltung</h1>
+    <p class="text-body-secondary mb-0">Pflege Fahrzeugdaten, Funkrufnamen und Besatzungen für den Alarmmonitor.</p>
   </div>
-  <div class="col-md-3">
-    <label class="form-label" for="vehicle-name">Name</label>
-    <input type="text" name="name" id="vehicle-name" class="form-control">
-  </div>
-  <div class="col-md-3">
-    <label class="form-label" for="vehicle-callsign">Funkrufname</label>
-    <input type="text" name="callsign" id="vehicle-callsign" class="form-control">
-  </div>
-  <div class="col-md-3">
-    <label class="form-label" for="vehicle-tts">Sprachausgabe</label>
-    <input type="text" name="tts" id="vehicle-tts" class="form-control">
-  </div>
+</div>
+
+<div id="vehicle-feedback" class="alert d-none" role="alert"></div>
+
+<div class="row gy-4">
   <div class="col-12">
-    <label class="form-label" for="vehicle-crew-table">Besatzung</label>
-    <table class="table table-sm" id="vehicle-crew-table">
-      <thead><tr><th>Name</th><th>Position</th><th></th></tr></thead>
-      <tbody></tbody>
-    </table>
-    <button type="button" class="btn btn-secondary btn-sm" id="add-crew-row">Mitglied hinzufügen</button>
-  </div>
-  <div class="col-12">
-    <button type="submit" class="btn btn-primary">Hinzufügen</button>
-  </div>
-</form>
-<table class="table table-striped" id="vehicle-list">
-  <thead>
-    <tr><th>Kurzname</th><th>Name</th><th>Funkrufname</th><th>Besatzung</th><th>Sprachausgabe</th><th>Status</th><th>Icon</th><th>Aktion</th></tr>
-  </thead>
-  <tbody>
-  {% for name, info in vehicles.items() %}
-    <tr data-unit="{{ name }}" class="status-{{ info.status }}">
-      <td>{{ name }}</td>
-      <td><input type="text" class="form-control form-control-sm name" value="{{ info.name }}"></td>
-      <td><input type="text" class="form-control form-control-sm callsign" value="{{ info.callsign }}"></td>
-      <td>
-        <table class="table table-sm mb-1 crew-table">
-          <tbody>
-          {% for member in info.crew %}
-            {% set parts = member.split(':') %}
-            <tr>
-              <td><input type="text" class="form-control form-control-sm crew-name" value="{{ parts[0] }}"></td>
-              <td><input type="text" class="form-control form-control-sm crew-position" value="{{ parts[1]|default('', true) }}"></td>
-              <td><button type="button" class="btn btn-sm btn-danger remove-crew">&times;</button></td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-        <button type="button" class="btn btn-sm btn-secondary add-crew">+</button>
-      </td>
-      <td><input type="text" class="form-control form-control-sm tts" value="{{ info.tts }}"></td>
-      <td>{{ info.status }}</td>
-      <td class="icon-cell">
-        {% if info.icon %}<img src="{{ url_for('static', filename=info.icon) }}" height="32" class="mb-1">{% endif %}
-        <form class="icon-form" enctype="multipart/form-data">
-          <label class="form-label visually-hidden" for="icon-{{ loop.index }}">Icon</label>
-          <input type="file" name="icon" id="icon-{{ loop.index }}" accept="image/*" class="form-control form-control-sm mb-1">
-          <button class="btn btn-sm btn-secondary">Upload</button>
+    <section class="card card-panel">
+      <div class="card-header">
+        <h2 class="h5 mb-1">Neues Fahrzeug hinzufügen</h2>
+        <p class="text-body-secondary small mb-0">Trage Kurzname, Funkrufname und Besatzung ein, um ein Fahrzeug im System anzulegen.</p>
+      </div>
+      <div class="card-body">
+        <form id="add-vehicle" class="row g-3" autocomplete="off">
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label" for="vehicle-unit">Kurzname</label>
+            <input type="text" name="unit" id="vehicle-unit" class="form-control" required placeholder="RTW1">
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label" for="vehicle-name">Name</label>
+            <input type="text" name="name" id="vehicle-name" class="form-control" placeholder="Rettungswagen 1">
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label" for="vehicle-callsign">Funkrufname</label>
+            <input type="text" name="callsign" id="vehicle-callsign" class="form-control" placeholder="Rotkreuz RTW 1">
+          </div>
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label" for="vehicle-tts">Sprachausgabe</label>
+            <input type="text" name="tts" id="vehicle-tts" class="form-control" placeholder="Rotkreuz Rettungswagen 1">
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="vehicle-crew-table">Besatzung</label>
+            <div class="table-responsive rounded-3 border border-secondary-subtle">
+              <table class="table table-sm mb-0" id="vehicle-crew-table">
+                <thead class="small text-uppercase">
+                  <tr><th>Name</th><th>Position</th><th class="text-end">Aktion</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <button type="button" class="btn btn-outline-light btn-sm mt-2" id="add-crew-row">Mitglied hinzufügen</button>
+          </div>
+          <div class="col-12 d-flex justify-content-end">
+            <button type="submit" class="btn btn-primary">Fahrzeug anlegen</button>
+          </div>
         </form>
-      </td>
-      <td>
-        <button class="btn btn-sm btn-primary save">Speichern</button>
-        <button class="btn btn-sm btn-danger delete">Löschen</button>
-      </td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+      </div>
+    </section>
+  </div>
+
+  <div class="col-12">
+    <section class="card card-panel">
+      <div class="card-header">
+        <h2 class="h5 mb-1">Bestehende Fahrzeuge</h2>
+        <p class="text-body-secondary small mb-0">Aktualisiere Daten, pflege Besatzungen oder lade individuelle Icons hoch.</p>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table align-middle" id="vehicle-list">
+            <thead>
+              <tr>
+                <th>Kurzname</th>
+                <th>Bezeichnung</th>
+                <th>Funkrufname</th>
+                <th>Besatzung</th>
+                <th>Sprachausgabe</th>
+                <th>Status</th>
+                <th>Icon</th>
+                <th class="text-end">Aktion</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for name, info in vehicles.items() %}
+              <tr data-unit="{{ name }}" class="status-{{ info.status }}">
+                <td class="fw-semibold">{{ name }}</td>
+                <td><input type="text" class="form-control form-control-sm name" value="{{ info.name }}"></td>
+                <td><input type="text" class="form-control form-control-sm callsign" value="{{ info.callsign }}"></td>
+                <td>
+                  <div class="table-responsive border rounded-3 crew-container">
+                    <table class="table table-sm mb-1 crew-table">
+                      <tbody>
+                      {% for member in info.crew %}
+                        {% set parts = member.split(':') %}
+                        <tr>
+                          <td><input type="text" class="form-control form-control-sm crew-name" value="{{ parts[0] }}" placeholder="Name"></td>
+                          <td><input type="text" class="form-control form-control-sm crew-position" value="{{ parts[1]|default('', true) }}" placeholder="Funktion"></td>
+                          <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger remove-crew" aria-label="Mitglied entfernen">&times;</button></td>
+                        </tr>
+                      {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                  <button type="button" class="btn btn-outline-light btn-sm add-crew mt-2">Mitglied hinzufügen</button>
+                </td>
+                <td><input type="text" class="form-control form-control-sm tts" value="{{ info.tts }}" placeholder="Sprachausgabe"></td>
+                <td>
+                  <span class="badge bg-secondary-subtle text-uppercase text-dark fw-semibold">{{ status_text.get(info.status, info.status) }}</span>
+                </td>
+                <td class="icon-cell">
+                  {% if info.icon %}<img src="{{ url_for('static', filename=info.icon) }}" height="32" class="mb-2" alt="{{ name }} Icon">{% endif %}
+                  <form class="icon-form" enctype="multipart/form-data">
+                    <label class="form-label visually-hidden" for="icon-{{ loop.index }}">Icon</label>
+                    <input type="file" name="icon" id="icon-{{ loop.index }}" accept="image/*" class="form-control form-control-sm mb-2">
+                    <button class="btn btn-outline-light btn-sm">Upload</button>
+                  </form>
+                </td>
+                <td class="text-end">
+                  <div class="btn-group btn-group-sm" role="group">
+                    <button class="btn btn-primary save">Speichern</button>
+                    <button class="btn btn-danger delete">Löschen</button>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
 {% endblock %}
+
 {% block scripts %}
-  <script>
-  function createCrewRow(name = '', position = '') {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td><input type="text" class="form-control form-control-sm crew-name" value="${name}"></td>` +
-                   `<td><input type="text" class="form-control form-control-sm crew-position" value="${position}"></td>` +
-                   `<td><button type="button" class="btn btn-sm btn-danger remove-crew">&times;</button></td>`;
-    return tr;
+<script>
+function createCrewRow(name = '', position = '') {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" class="form-control form-control-sm crew-name" value="${name}" placeholder="Name"></td>
+    <td><input type="text" class="form-control form-control-sm crew-position" value="${position}" placeholder="Funktion"></td>
+    <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger remove-crew" aria-label="Mitglied entfernen">&times;</button></td>
+  `;
+  return tr;
+}
+
+function getCrewFromTable(table) {
+  const data = [];
+  table.querySelectorAll('tbody tr').forEach(row => {
+    const nameInput = row.querySelector('.crew-name');
+    const positionInput = row.querySelector('.crew-position');
+    const name = nameInput ? nameInput.value.trim() : '';
+    const position = positionInput ? positionInput.value.trim() : '';
+    if (name) {
+      data.push(position ? `${name}:${position}` : name);
+    }
+  });
+  return data;
+}
+
+const vehicleFeedback = document.getElementById('vehicle-feedback');
+
+function showVehicleFeedback(message, type = 'success') {
+  if (!vehicleFeedback) return;
+  vehicleFeedback.textContent = message;
+  vehicleFeedback.classList.remove('d-none', 'alert-success', 'alert-danger', 'alert-warning');
+  vehicleFeedback.classList.add(`alert-${type}`);
+  const previous = Number(vehicleFeedback.dataset.timeout || 0);
+  if (previous) {
+    clearTimeout(previous);
   }
-  function getCrewFromTable(table) {
-    const data = [];
-    table.querySelectorAll('tbody tr').forEach(row => {
-      const name = row.querySelector('.crew-name').value.trim();
-      const pos = row.querySelector('.crew-position').value.trim();
-      if (name) data.push(pos ? `${name}:${pos}` : name);
-    });
-    return data;
-  }
-  const newCrewTable = document.getElementById('vehicle-crew-table');
-  document.getElementById('add-crew-row').addEventListener('click', () => {
+  const timeout = window.setTimeout(() => {
+    vehicleFeedback.classList.add('d-none');
+    vehicleFeedback.dataset.timeout = '';
+  }, 5000);
+  vehicleFeedback.dataset.timeout = timeout;
+}
+
+const newCrewTable = document.getElementById('vehicle-crew-table');
+const addCrewButton = document.getElementById('add-crew-row');
+if (addCrewButton && newCrewTable) {
+  addCrewButton.addEventListener('click', () => {
     newCrewTable.querySelector('tbody').appendChild(createCrewRow());
   });
-  newCrewTable.addEventListener('click', e => {
-    if (e.target.classList.contains('remove-crew')) {
-      e.target.closest('tr').remove();
+  newCrewTable.addEventListener('click', event => {
+    if (event.target.classList.contains('remove-crew')) {
+      event.target.closest('tr')?.remove();
     }
   });
-  const form = document.getElementById('add-vehicle');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const formData = Object.fromEntries(new FormData(form).entries());
-    formData.crew = getCrewFromTable(newCrewTable);
-    formData.tts = formData.tts || '';
-    const res = await fetch('/api/vehicles', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(formData)
-    });
-    const r = await res.json();
-    if (r.ok) {
-      location.reload();
-    }
-  });
+}
 
-  document.querySelectorAll('#vehicle-list .add-crew').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const table = btn.previousElementSibling;
-      table.querySelector('tbody').appendChild(createCrewRow());
-    });
-  });
-  document.querySelectorAll('#vehicle-list .crew-table').forEach(table => {
-    table.addEventListener('click', e => {
-      if (e.target.classList.contains('remove-crew')) {
-        e.target.closest('tr').remove();
-      }
-    });
-  });
-
-  document.querySelectorAll('#vehicle-list .delete').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      const unit = e.target.closest('tr').dataset.unit;
-      const res = await fetch(`/api/vehicles/${unit}`, {method:'DELETE'});
-      const r = await res.json();
-      if (r.ok) {
-        e.target.closest('tr').remove();
-      }
-    });
-  });
-
-  document.querySelectorAll('#vehicle-list .save').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      const tr = e.target.closest('tr');
-      const unit = tr.dataset.unit;
-      const payload = {
-        name: tr.querySelector('.name').value,
-        callsign: tr.querySelector('.callsign').value,
-        crew: getCrewFromTable(tr.querySelector('.crew-table')),
-        tts: tr.querySelector('.tts').value
-      };
-      const res = await fetch(`/api/vehicles/${unit}`, {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(payload)
-      });
-      const r = await res.json();
-      if (r.ok) {
-        alert('Gespeichert');
-      }
-    });
-  });
-
-  document.querySelectorAll('#vehicle-list .icon-form').forEach(form => {
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const unit = form.closest('tr').dataset.unit;
-      const fd = new FormData(form);
-      const res = await fetch(`/api/vehicles/${unit}/icon`, {
+const form = document.getElementById('add-vehicle');
+if (form && newCrewTable) {
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const formData = new FormData(form);
+    const payload = Object.fromEntries(formData.entries());
+    payload.crew = getCrewFromTable(newCrewTable);
+    payload.tts = payload.tts || '';
+    try {
+      const res = await fetch('/api/vehicles', {
         method: 'POST',
-        body: fd
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
-      const r = await res.json();
-      if (r.ok) {
-        location.reload();
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error((data && data.error) || 'Fahrzeug konnte nicht angelegt werden.');
       }
-    });
+      showVehicleFeedback('Fahrzeug wurde angelegt.');
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (err) {
+      showVehicleFeedback(err.message || 'Fahrzeug konnte nicht angelegt werden.', 'danger');
+    }
   });
-  </script>
+}
+
+document.querySelectorAll('#vehicle-list .add-crew').forEach(button => {
+  button.addEventListener('click', () => {
+    const table = button.previousElementSibling?.querySelector('tbody')
+      ? button.previousElementSibling.querySelector('tbody')
+      : null;
+    if (table) {
+      table.appendChild(createCrewRow());
+    }
+  });
+});
+
+document.querySelectorAll('#vehicle-list .crew-table').forEach(table => {
+  table.addEventListener('click', event => {
+    if (event.target.classList.contains('remove-crew')) {
+      event.target.closest('tr')?.remove();
+    }
+  });
+});
+
+document.querySelectorAll('#vehicle-list .delete').forEach(button => {
+  button.addEventListener('click', async event => {
+    const unit = event.target.closest('tr')?.dataset.unit;
+    if (!unit) return;
+    if (!window.confirm(`Soll das Fahrzeug ${unit} wirklich gelöscht werden?`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/vehicles/${encodeURIComponent(unit)}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error((data && data.error) || 'Fahrzeug konnte nicht gelöscht werden.');
+      }
+      event.target.closest('tr')?.remove();
+      showVehicleFeedback(`Fahrzeug ${unit} wurde gelöscht.`, 'warning');
+    } catch (err) {
+      showVehicleFeedback(err.message || 'Fahrzeug konnte nicht gelöscht werden.', 'danger');
+    }
+  });
+});
+
+document.querySelectorAll('#vehicle-list .save').forEach(button => {
+  button.addEventListener('click', async event => {
+    const row = event.target.closest('tr');
+    if (!row) return;
+    const unit = row.dataset.unit;
+    const payload = {
+      name: row.querySelector('.name')?.value || '',
+      callsign: row.querySelector('.callsign')?.value || '',
+      crew: getCrewFromTable(row.querySelector('.crew-table')),
+      tts: row.querySelector('.tts')?.value || '',
+    };
+    try {
+      const res = await fetch(`/api/vehicles/${encodeURIComponent(unit)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error((data && data.error) || 'Fahrzeug konnte nicht gespeichert werden.');
+      }
+      showVehicleFeedback(`Fahrzeug ${unit} wurde aktualisiert.`);
+    } catch (err) {
+      showVehicleFeedback(err.message || 'Fahrzeug konnte nicht gespeichert werden.', 'danger');
+    }
+  });
+});
+
+document.querySelectorAll('#vehicle-list .icon-form').forEach(iconForm => {
+  iconForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const unit = iconForm.closest('tr')?.dataset.unit;
+    if (!unit) return;
+    const fd = new FormData(iconForm);
+    try {
+      const res = await fetch(`/api/vehicles/${encodeURIComponent(unit)}/icon`, {
+        method: 'POST',
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error((data && data.error) || 'Icon konnte nicht hochgeladen werden.');
+      }
+      showVehicleFeedback(`Icon für ${unit} wurde aktualisiert.`);
+      window.setTimeout(() => window.location.reload(), 800);
+    } catch (err) {
+      showVehicleFeedback(err.message || 'Icon konnte nicht hochgeladen werden.', 'danger');
+    }
+  });
+});
+</script>
 {% endblock %}

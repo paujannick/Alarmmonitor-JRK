@@ -146,6 +146,11 @@ DEFAULT_SETTINGS = {
     'monitor': {
         'show_weather': True,
     },
+    'network': {
+        'router_name': 'TP-Link Reise Router',
+        'admin_url': 'http://tplinkwifi.net',
+        'notes': '',
+    },
 }
 
 
@@ -161,6 +166,22 @@ def parse_bool(value, default=False):
         if lowered in {'false', '0', 'no', 'off'}:
             return False
     return default
+
+
+def normalise_router_url(value):
+    if not value:
+        return ''
+    if not isinstance(value, str):
+        return ''
+    trimmed = value.strip()
+    if not trimmed:
+        return ''
+    parsed = parse.urlparse(trimmed if '://' in trimmed else f'http://{trimmed}')
+    scheme = parsed.scheme or 'http'
+    netloc = parsed.netloc or parsed.path
+    path = parsed.path if parsed.netloc else ''
+    normalised = parse.urlunparse((scheme, netloc, path, '', '', ''))
+    return normalised.rstrip('/')
 
 
 def load_settings():
@@ -192,6 +213,14 @@ def load_settings():
                     merged_monitor.get('show_weather', True),
                 )
             settings['monitor'] = merged_monitor
+        network_settings = data.get('network') or {}
+        if isinstance(network_settings, dict):
+            merged_network = settings['network'].copy()
+            for key in ('router_name', 'admin_url', 'notes'):
+                value = network_settings.get(key)
+                if isinstance(value, str):
+                    merged_network[key] = value.strip()
+            settings['network'] = merged_network
     return settings
 
 
@@ -560,7 +589,12 @@ def dispatch():
 
 @app.route('/vehicles')
 def vehicles_page():
-    return render_template('vehicles.html', title='Fahrzeuge', vehicles=vehicles)
+    return render_template(
+        'vehicles.html',
+        title='Fahrzeuge',
+        vehicles=vehicles,
+        status_text=STATUS_TEXT,
+    )
 
 
 @app.route('/vehicle-status')
@@ -1231,6 +1265,27 @@ def api_update_monitor_settings():
     settings['monitor'] = monitor_settings
     save_settings()
     return jsonify({'ok': True, 'monitor': monitor_settings})
+
+
+@app.route('/api/settings/network', methods=['PUT'])
+def api_update_network_settings():
+    data = request.json or {}
+    network_settings = dict(settings.get('network') or {})
+    router_name = data.get('router_name')
+    notes = data.get('notes')
+    admin_url = data.get('admin_url')
+    if isinstance(router_name, str):
+        fallback = DEFAULT_SETTINGS['network']['router_name']
+        network_settings['router_name'] = router_name.strip() or fallback
+    if isinstance(notes, str):
+        network_settings['notes'] = notes.strip()
+    url_value = normalise_router_url(admin_url) if admin_url else ''
+    if not url_value:
+        url_value = DEFAULT_SETTINGS['network']['admin_url']
+    network_settings['admin_url'] = url_value
+    settings['network'] = network_settings
+    save_settings()
+    return jsonify({'ok': True, 'network': network_settings})
 
 
 @app.route('/api/geocode/reverse')
