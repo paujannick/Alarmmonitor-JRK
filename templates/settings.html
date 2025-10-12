@@ -1,155 +1,274 @@
 {% extends 'base.html' %}
+{% set network = app_settings.network or {} %}
 {% block content %}
-<h1>Einstellungen</h1>
-<p>
-    <a href="{{ url_for('download_log') }}" class="btn btn-secondary">Log herunterladen</a>
-</p>
-
-<h2 class="mt-4">Einsatzbereich für Alarmmonitor</h2>
-<form id="operation-area-form" class="row g-3 align-items-end">
-  <div class="col-md-6">
-    <label class="form-label" for="operation-area-name">Stadt / Einsatzbereich</label>
-    <input type="text" id="operation-area-name" class="form-control" value="{{ app_settings.operation_area.name }}" placeholder="z.&nbsp;B. Gießen">
+<div class="page-header d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+  <div>
+    <h1 class="mb-1">Einstellungen</h1>
+    <p class="text-body-secondary mb-0">Passe Einsatzbereich, Monitor, Netzwerk und Vorlagen an deine Bedürfnisse an.</p>
   </div>
-  <div class="col-md-3">
-    <label class="form-label" for="operation-area-zoom">Standard Zoom</label>
-    <input type="number" id="operation-area-zoom" class="form-control" value="{{ app_settings.operation_area.zoom }}" min="3" max="18">
-  </div>
-  <div class="col-md-3">
-    <button type="submit" class="btn btn-primary w-100">Einsatzbereich speichern</button>
-  </div>
-  <div class="col-12">
-    <div id="operation-area-feedback" class="alert d-none" role="alert"></div>
-    <p id="operation-area-current" class="text-white-50 small mb-0">Aktuelles Zentrum: {{ '%.5f'|format(app_settings.operation_area.lat) }}, {{ '%.5f'|format(app_settings.operation_area.lon) }}</p>
-  </div>
-</form>
-
-<h2 class="mt-4">Anzeigeoptionen</h2>
-<div class="form-check form-switch">
-  <input class="form-check-input" type="checkbox" id="monitor-show-weather" {% if app_settings.monitor.show_weather %}checked{% endif %}>
-  <label class="form-check-label" for="monitor-show-weather">Wetter-Kachel auf dem Monitor anzeigen</label>
+  <a href="{{ url_for('download_log') }}" class="btn btn-outline-light">Log herunterladen</a>
 </div>
-<div id="monitor-settings-feedback" class="alert d-none mt-3" role="alert"></div>
-<p class="text-white-50 small">Blendt die Wetter-Kachel aus, wenn der verfügbare Platz für andere Kacheln benötigt wird.</p>
 
-<h2 class="mt-4">Sprachausgabe der Funkrufnamen</h2>
-<table class="table" id="tts-table">
-  <thead><tr><th>Funkrufname</th><th>Sprachausgabe</th><th>Aktion</th></tr></thead>
-  <tbody>
-  {% for name, info in vehicles.items() %}
-    <tr data-unit="{{ name }}">
-      <td>{{ info.callsign }}</td>
-      <td>
-        <label class="visually-hidden" for="tts-{{ loop.index }}">Sprachausgabe</label>
-        <input type="text" id="tts-{{ loop.index }}" class="form-control form-control-sm tts" value="{{ info.tts or info.callsign }}">
-      </td>
-      <td><button class="btn btn-sm btn-primary save">Speichern</button></td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div class="row gy-4">
+  <div class="col-12 col-xl-6">
+    <section class="card card-panel h-100">
+      <div class="card-header">
+        <h2 class="h5 mb-1">Einsatzbereich für Alarmmonitor</h2>
+        <p class="text-body-secondary small mb-0">Legt den Kartenausschnitt und das Zentrum für Einsätze fest.</p>
+      </div>
+      <div class="card-body">
+        <form id="operation-area-form" class="row g-3 align-items-end" autocomplete="off">
+          <div class="col-12">
+            <label class="form-label" for="operation-area-name">Stadt / Einsatzbereich</label>
+            <input type="text" id="operation-area-name" class="form-control" value="{{ app_settings.operation_area.name }}" placeholder="z.&nbsp;B. Gießen">
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label" for="operation-area-zoom">Standard Zoom</label>
+            <input type="number" id="operation-area-zoom" class="form-control" value="{{ app_settings.operation_area.zoom }}" min="3" max="18">
+          </div>
+          <div class="col-sm-6 d-grid">
+            <button type="submit" class="btn btn-primary">Einsatzbereich speichern</button>
+          </div>
+          <div class="col-12">
+            <div id="operation-area-feedback" class="alert d-none" role="alert"></div>
+            <p id="operation-area-current" class="text-body-secondary small mb-0">Aktuelles Zentrum: {{ '%.5f'|format(app_settings.operation_area.lat) }}, {{ '%.5f'|format(app_settings.operation_area.lon) }}</p>
+          </div>
+        </form>
+      </div>
+    </section>
+  </div>
 
-<h2 class="mt-4">Standorte der Wachen</h2>
-<table class="table" id="base-table">
-  <thead><tr><th>Fahrzeug</th><th>Wache</th><th>Aktion</th></tr></thead>
-  <tbody>
-  {% for name, info in vehicles.items() %}
-    <tr data-unit="{{ name }}">
-      <td>{{ name }}</td>
-      <td><input type="text" class="form-control form-control-sm base" value="{{ info.base }}"></td>
-      <td><button class="btn btn-sm btn-primary save-base">Speichern</button></td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+  <div class="col-12 col-xl-6">
+    <section class="card card-panel h-100">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-start gap-3">
+        <div>
+          <h2 class="h5 mb-1">Netzwerkverwaltung</h2>
+          <p class="text-body-secondary small mb-0">Das WLAN des Alarmmonitors wird über einen TP-Link Reise Router bereitgestellt.</p>
+        </div>
+        {% if network.admin_url %}
+        <a id="network-open-button" class="btn btn-outline-warning" href="{{ network.admin_url }}" target="_blank" rel="noopener">Router öffnen</a>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <form id="network-settings-form" class="row g-3" autocomplete="off">
+          <div class="col-sm-6">
+            <label class="form-label" for="network-router-name">Gerätename</label>
+            <input type="text" id="network-router-name" name="router_name" class="form-control" value="{{ network.router_name or '' }}" placeholder="TP-Link Reise Router">
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label" for="network-admin-url">Administrations-URL</label>
+            <input type="url" id="network-admin-url" name="admin_url" class="form-control" value="{{ network.admin_url or '' }}" placeholder="http://tplinkwifi.net">
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="network-notes">Hinweis (z.&nbsp;B. Zugangsdaten)</label>
+            <textarea id="network-notes" name="notes" class="form-control" rows="2" placeholder="Passwort steht auf der Unterseite.">{{ network.notes or '' }}</textarea>
+          </div>
+          <div class="col-12 d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <p class="text-body-secondary small mb-0">Die WLAN-Konfiguration erfolgt direkt über den Router. Verbinde dich mit dem TP-Link WLAN, öffne die Administrations-URL und folge dem Einrichtungsassistenten.</p>
+            <button type="submit" class="btn btn-primary">Netzwerk speichern</button>
+          </div>
+        </form>
+        <div id="network-settings-feedback" class="alert d-none mt-3" role="alert"></div>
+      </div>
+    </section>
+  </div>
 
-<h2 class="mt-4">Einsatzvorlagen</h2>
-<form id="template-add" class="row g-3 mb-3">
-  <div class="col-md-3">
-    <input type="text" name="id" class="form-control" placeholder="ID" required>
+  <div class="col-12 col-xl-6">
+    <section class="card card-panel h-100">
+      <div class="card-header">
+        <h2 class="h5 mb-1">Monitor &amp; Anzeigen</h2>
+        <p class="text-body-secondary small mb-0">Steuert die Zusatzinformationen auf dem großen Monitor.</p>
+      </div>
+      <div class="card-body d-flex flex-column gap-3">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="monitor-show-weather" {% if app_settings.monitor.show_weather %}checked{% endif %}>
+          <label class="form-check-label" for="monitor-show-weather">Wetter-Kachel auf dem Monitor anzeigen</label>
+        </div>
+        <p class="text-body-secondary small mb-0">Blendt die Wetter-Kachel aus, wenn der verfügbare Platz für andere Kacheln benötigt wird.</p>
+        <div id="monitor-settings-feedback" class="alert d-none" role="alert"></div>
+      </div>
+    </section>
   </div>
-  <div class="col-md-3">
-    <input type="text" name="label" class="form-control" placeholder="Bezeichnung" required>
+
+  <div class="col-12 col-xl-6">
+    <section class="card card-panel h-100">
+      <div class="card-header">
+        <h2 class="h5 mb-1">Standorte der Wachen</h2>
+        <p class="text-body-secondary small mb-0">Definiert die Heimstandorte für die Fahrzeuge.</p>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table align-middle" id="base-table">
+            <thead>
+              <tr><th>Fahrzeug</th><th>Wache</th><th class="text-end">Aktion</th></tr>
+            </thead>
+            <tbody>
+            {% for name, info in vehicles.items() %}
+              <tr data-unit="{{ name }}">
+                <td class="fw-semibold">{{ name }}</td>
+                <td><input type="text" class="form-control form-control-sm base" value="{{ info.base }}" placeholder="z.&nbsp;B. Rettungswache Lich"></td>
+                <td class="text-end"><button class="btn btn-sm btn-primary save-base">Speichern</button></td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </div>
-  <div class="col-md-3">
-    <input type="text" name="keyword" class="form-control" placeholder="Stichwort" required>
-  </div>
-  <div class="col-md-3">
-    <select name="priority" class="form-select">
-      <option value="">--</option>
-      {% for prio in priorities %}
-      <option value="{{ prio }}">{{ prio }}</option>
-      {% endfor %}
-    </select>
-  </div>
+
   <div class="col-12">
-    <button class="btn btn-primary">Hinzufügen</button>
+    <section class="card card-panel">
+      <div class="card-header">
+        <h2 class="h5 mb-1">Sprachausgabe der Funkrufnamen</h2>
+        <p class="text-body-secondary small mb-0">Passe an, wie Fahrzeuge in Sprachausgaben ausgesprochen werden.</p>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table align-middle" id="tts-table">
+            <thead><tr><th>Funkrufname</th><th>Sprachausgabe</th><th class="text-end">Aktion</th></tr></thead>
+            <tbody>
+            {% for name, info in vehicles.items() %}
+              <tr data-unit="{{ name }}">
+                <td>{{ info.callsign }}</td>
+                <td>
+                  <label class="visually-hidden" for="tts-{{ loop.index }}">Sprachausgabe</label>
+                  <input type="text" id="tts-{{ loop.index }}" class="form-control form-control-sm tts" value="{{ info.tts or info.callsign }}">
+                </td>
+                <td class="text-end"><button class="btn btn-sm btn-primary save">Speichern</button></td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </div>
-</form>
-<table class="table" id="template-table">
-  <thead><tr><th>ID</th><th>Bezeichnung</th><th>Stichwort</th><th>Priorität</th><th>Aktion</th></tr></thead>
-  <tbody>
-  {% for t in templates %}
-    <tr data-id="{{ t.id }}">
-      <td>{{ t.id }}</td>
-      <td><input type="text" class="form-control form-control-sm label" value="{{ t.label }}"></td>
-      <td><input type="text" class="form-control form-control-sm keyword" value="{{ t.keyword }}"></td>
-      <td>
-        <select class="form-select form-select-sm priority">
-          <option value="">--</option>
-          {% for prio in priorities %}
-          <option value="{{ prio }}" {% if prio == t.priority %}selected{% endif %}>{{ prio }}</option>
-          {% endfor %}
-          {% if t.priority and t.priority not in priorities %}
-          <option value="{{ t.priority }}" selected>{{ t.priority }}</option>
-          {% endif %}
-        </select>
-      </td>
-      <td>
-        <button class="btn btn-sm btn-primary save-template">Speichern</button>
-        <button class="btn btn-sm btn-danger delete-template">Löschen</button>
-      </td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
 
-<h2 class="mt-4">Prioritäten</h2>
-<form id="priority-form" class="mb-3">
-  <table class="table" id="priority-table">
-    <thead><tr><th>Bezeichnung</th><th>Aktion</th></tr></thead>
-    <tbody>
-    {% for prio in priorities %}
-      <tr>
-        <td><input type="text" class="form-control form-control-sm priority-value" value="{{ prio }}"></td>
-        <td><button type="button" class="btn btn-sm btn-danger priority-delete">Löschen</button></td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  <div class="d-flex gap-2">
-    <button type="button" class="btn btn-secondary" id="priority-add">Neue Priorität</button>
-    <button type="submit" class="btn btn-primary">Speichern</button>
+  <div class="col-12">
+    <section class="card card-panel">
+      <div class="card-header">
+        <h2 class="h5 mb-1">Einsatzvorlagen</h2>
+        <p class="text-body-secondary small mb-0">Bereite häufige Einsatzszenarien vor, um sie schneller auszulösen.</p>
+      </div>
+      <div class="card-body">
+        <form id="template-add" class="row g-3 mb-4">
+          <div class="col-md-3">
+            <label class="form-label visually-hidden" for="template-id">ID</label>
+            <input type="text" id="template-id" name="id" class="form-control" placeholder="ID" required>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label visually-hidden" for="template-label">Bezeichnung</label>
+            <input type="text" id="template-label" name="label" class="form-control" placeholder="Bezeichnung" required>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label visually-hidden" for="template-keyword">Stichwort</label>
+            <input type="text" id="template-keyword" name="keyword" class="form-control" placeholder="Stichwort" required>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label visually-hidden" for="template-priority">Priorität</label>
+            <select id="template-priority" name="priority" class="form-select">
+              <option value="">--</option>
+              {% for prio in priorities %}
+              <option value="{{ prio }}">{{ prio }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary">Vorlage hinzufügen</button>
+          </div>
+        </form>
+        <div class="table-responsive">
+          <table class="table align-middle" id="template-table">
+            <thead><tr><th>ID</th><th>Bezeichnung</th><th>Stichwort</th><th>Priorität</th><th class="text-end">Aktion</th></tr></thead>
+            <tbody>
+            {% for t in templates %}
+              <tr data-id="{{ t.id }}">
+                <td class="fw-semibold">{{ t.id }}</td>
+                <td><input type="text" class="form-control form-control-sm label" value="{{ t.label }}"></td>
+                <td><input type="text" class="form-control form-control-sm keyword" value="{{ t.keyword }}"></td>
+                <td>
+                  <select class="form-select form-select-sm priority">
+                    <option value="">--</option>
+                    {% for prio in priorities %}
+                    <option value="{{ prio }}" {% if prio == t.priority %}selected{% endif %}>{{ prio }}</option>
+                    {% endfor %}
+                    {% if t.priority and t.priority not in priorities %}
+                    <option value="{{ t.priority }}" selected>{{ t.priority }}</option>
+                    {% endif %}
+                  </select>
+                </td>
+                <td class="text-end">
+                  <div class="btn-group btn-group-sm" role="group">
+                    <button class="btn btn-primary save-template">Speichern</button>
+                    <button class="btn btn-danger delete-template">Löschen</button>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </div>
-</form>
+
+  <div class="col-12 col-lg-6">
+    <section class="card card-panel h-100">
+      <div class="card-header">
+        <h2 class="h5 mb-1">Prioritäten</h2>
+        <p class="text-body-secondary small mb-0">Definiert die verfügbaren Prioritätsstufen für Einsätze.</p>
+      </div>
+      <div class="card-body">
+        <form id="priority-form" class="d-flex flex-column gap-3">
+          <div class="table-responsive">
+            <table class="table align-middle" id="priority-table">
+              <thead><tr><th>Bezeichnung</th><th class="text-end">Aktion</th></tr></thead>
+              <tbody>
+              {% for prio in priorities %}
+                <tr>
+                  <td><input type="text" class="form-control form-control-sm priority-value" value="{{ prio }}"></td>
+                  <td class="text-end"><button type="button" class="btn btn-sm btn-danger priority-delete">Löschen</button></td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-light" id="priority-add">Neue Priorität</button>
+            <button type="submit" class="btn btn-primary">Prioritäten speichern</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+function showFeedback(target, message, type = 'success') {
+  if (!target) return;
+  target.textContent = message;
+  target.classList.remove('d-none', 'alert-success', 'alert-danger', 'alert-warning');
+  target.classList.add(`alert-${type}`);
+  const previous = Number(target.dataset.timeout || 0);
+  if (previous) {
+    clearTimeout(previous);
+  }
+  const timeout = window.setTimeout(() => {
+    target.classList.add('d-none');
+    target.dataset.timeout = '';
+  }, 5000);
+  target.dataset.timeout = timeout;
+}
+
 const monitorToggle = document.getElementById('monitor-show-weather');
 const monitorFeedback = document.getElementById('monitor-settings-feedback');
-
-function resetMonitorFeedback() {
-  if (!monitorFeedback) return;
-  monitorFeedback.classList.add('d-none');
-  monitorFeedback.classList.remove('alert-success', 'alert-danger');
-  monitorFeedback.textContent = '';
-}
 
 if (monitorToggle) {
   monitorToggle.addEventListener('change', async () => {
     const enabled = monitorToggle.checked;
-    resetMonitorFeedback();
     monitorToggle.disabled = true;
     try {
       const response = await fetch('/api/settings/monitor', {
@@ -159,25 +278,12 @@ if (monitorToggle) {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.ok) {
-        const message = (data && data.error) || 'Monitor-Einstellungen konnten nicht gespeichert werden.';
-        throw new Error(message);
+        throw new Error((data && data.error) || 'Monitor-Einstellungen konnten nicht gespeichert werden.');
       }
-      if (monitorFeedback) {
-        monitorFeedback.textContent = enabled
-          ? 'Die Wetter-Kachel ist nun sichtbar.'
-          : 'Die Wetter-Kachel wurde ausgeblendet.';
-        monitorFeedback.classList.remove('d-none');
-        monitorFeedback.classList.add('alert-success');
-      }
+      showFeedback(monitorFeedback, enabled ? 'Die Wetter-Kachel ist nun sichtbar.' : 'Die Wetter-Kachel wurde ausgeblendet.');
     } catch (err) {
       monitorToggle.checked = !enabled;
-      if (monitorFeedback) {
-        monitorFeedback.textContent = err.message || 'Monitor-Einstellungen konnten nicht gespeichert werden.';
-        monitorFeedback.classList.remove('d-none');
-        monitorFeedback.classList.add('alert-danger');
-      } else {
-        alert(err.message || 'Monitor-Einstellungen konnten nicht gespeichert werden.');
-      }
+      showFeedback(monitorFeedback, err.message || 'Monitor-Einstellungen konnten nicht gespeichert werden.', 'danger');
     } finally {
       monitorToggle.disabled = false;
     }
@@ -196,11 +302,6 @@ if (operationAreaForm) {
       name: nameInput ? nameInput.value.trim() : '',
       zoom: zoomInput ? zoomInput.value : undefined,
     };
-    if (feedback) {
-      feedback.classList.add('d-none');
-      feedback.classList.remove('alert-success', 'alert-danger');
-      feedback.textContent = '';
-    }
     try {
       const response = await fetch('/api/settings/operation-area', {
         method: 'PUT',
@@ -209,167 +310,63 @@ if (operationAreaForm) {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.ok) {
-        const message = (data && data.error) || 'Einsatzbereich konnte nicht gespeichert werden.';
-        throw new Error(message);
+        throw new Error((data && data.error) || 'Einsatzbereich konnte nicht gespeichert werden.');
       }
       if (feedback) {
-        feedback.textContent = `Einsatzbereich aktualisiert: ${data.operation_area.name}`;
-        feedback.classList.remove('d-none');
-        feedback.classList.add('alert', 'alert-success');
-      }
-      if (nameInput && data.operation_area && data.operation_area.name !== undefined) {
-        nameInput.value = data.operation_area.name;
-      }
-      if (zoomInput && data.operation_area && data.operation_area.zoom !== undefined) {
-        zoomInput.value = data.operation_area.zoom;
+        showFeedback(feedback, 'Einsatzbereich gespeichert.');
       }
       if (currentEl && data.operation_area) {
-        const lat = Number(data.operation_area.lat);
-        const lon = Number(data.operation_area.lon);
-        const latText = Number.isFinite(lat) ? lat.toFixed(5) : '--';
-        const lonText = Number.isFinite(lon) ? lon.toFixed(5) : '--';
-        currentEl.textContent = `Aktuelles Zentrum: ${latText}, ${lonText}`;
+        const { lat, lon } = data.operation_area;
+        currentEl.textContent = `Aktuelles Zentrum: ${Number(lat).toFixed(5)}, ${Number(lon).toFixed(5)}`;
       }
     } catch (err) {
       if (feedback) {
-        feedback.textContent = err.message || 'Einsatzbereich konnte nicht gespeichert werden.';
-        feedback.classList.remove('d-none');
-        feedback.classList.add('alert', 'alert-danger');
-      } else {
-        alert(err.message || 'Einsatzbereich konnte nicht gespeichert werden.');
+        showFeedback(feedback, err.message || 'Einsatzbereich konnte nicht gespeichert werden.', 'danger');
       }
     }
   });
 }
 
-document.querySelectorAll('#tts-table .save').forEach(btn => {
-  btn.addEventListener('click', async (e) => {
-    const tr = e.target.closest('tr');
-    const unit = tr.dataset.unit;
-    const tts = tr.querySelector('.tts').value;
-    const res = await fetch(`/api/vehicles/${unit}`, {
-      method: 'PUT',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({tts})
-    });
-    const r = await res.json();
-    if (r.ok) {
-      alert('Gespeichert');
+const networkForm = document.getElementById('network-settings-form');
+if (networkForm) {
+  const feedback = document.getElementById('network-settings-feedback');
+  networkForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const formData = new FormData(networkForm);
+    const payload = Object.fromEntries(formData.entries());
+    try {
+      const response = await fetch('/api/settings/network', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) {
+        throw new Error((data && data.error) || 'Netzwerkeinstellungen konnten nicht gespeichert werden.');
+      }
+      showFeedback(feedback, 'Netzwerkhinweise gespeichert.');
+      if (data.network && data.network.admin_url) {
+        const openButton = document.getElementById('network-open-button');
+        if (openButton) {
+          openButton.href = data.network.admin_url;
+        } else {
+          const buttonWrapper = networkForm.closest('.card')?.querySelector('.card-header');
+          if (buttonWrapper) {
+            const link = document.createElement('a');
+            link.id = 'network-open-button';
+            link.className = 'btn btn-outline-warning';
+            link.href = data.network.admin_url;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.textContent = 'Router öffnen';
+            buttonWrapper.appendChild(link);
+          }
+        }
+      }
+    } catch (err) {
+      showFeedback(feedback, err.message || 'Netzwerkeinstellungen konnten nicht gespeichert werden.', 'danger');
     }
   });
-});
-
-document.querySelectorAll('#base-table .save-base').forEach(btn => {
-  btn.addEventListener('click', async (e) => {
-    const tr = e.target.closest('tr');
-    const unit = tr.dataset.unit;
-    const base = tr.querySelector('.base').value;
-    const res = await fetch(`/api/vehicles/${unit}`, {
-      method: 'PUT',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({base})
-    });
-    const r = await res.json();
-    if (r.ok) {
-      alert('Gespeichert');
-    }
-  });
-});
-
-const tplForm = document.getElementById('template-add');
-tplForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const data = Object.fromEntries(new FormData(tplForm).entries());
-  const res = await fetch('/api/templates', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(data)
-  });
-  const r = await res.json();
-  if (r.ok) {
-    location.reload();
-  }
-});
-
-document.querySelectorAll('#template-table .save-template').forEach(btn => {
-  btn.addEventListener('click', async (e) => {
-    const tr = e.target.closest('tr');
-    const id = tr.dataset.id;
-    const payload = {
-      id,
-      label: tr.querySelector('.label').value,
-      keyword: tr.querySelector('.keyword').value,
-      priority: tr.querySelector('.priority').value
-    };
-    const res = await fetch('/api/templates', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload)
-    });
-    const r = await res.json();
-    if (r.ok) {
-      alert('Gespeichert');
-    }
-  });
-});
-
-document.querySelectorAll('#template-table .delete-template').forEach(btn => {
-  btn.addEventListener('click', async (e) => {
-    const tr = e.target.closest('tr');
-    const id = tr.dataset.id;
-    const res = await fetch(`/api/templates/${id}`, {method: 'DELETE'});
-    const r = await res.json();
-    if (r.ok) {
-      tr.remove();
-    }
-  });
-});
-
-const priorityTableBody = document.querySelector('#priority-table tbody');
-
-function escapePriorityValue(value) {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 }
-
-function addPriorityRow(value = '') {
-  const tr = document.createElement('tr');
-  tr.innerHTML = `
-    <td><input type="text" class="form-control form-control-sm priority-value" value="${escapePriorityValue(value)}"></td>
-    <td><button type="button" class="btn btn-sm btn-danger priority-delete">Löschen</button></td>
-  `;
-  priorityTableBody.appendChild(tr);
-}
-
-document.getElementById('priority-add').addEventListener('click', () => {
-  addPriorityRow();
-});
-
-priorityTableBody.addEventListener('click', (e) => {
-  if (e.target.classList.contains('priority-delete')) {
-    e.target.closest('tr').remove();
-  }
-});
-
-if (!priorityTableBody.children.length) {
-  addPriorityRow();
-}
-
-document.getElementById('priority-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const values = Array.from(priorityTableBody.querySelectorAll('.priority-value'))
-    .map(input => input.value.trim())
-    .filter((value, index, arr) => value && arr.indexOf(value) === index);
-  const res = await fetch('/api/priorities', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({priorities: values})
-  });
-  const result = await res.json();
-  if (result.ok) {
-    location.reload();
-  } else {
-    alert('Prioritäten konnten nicht gespeichert werden.');
-  }
-});
 </script>
 {% endblock %}
