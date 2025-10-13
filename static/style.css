@@ -129,6 +129,40 @@ body {
   box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.35);
 }
 
+
+/*
+ * Form controls
+ * Ensure input fields fit the dark appearance across all pages, including
+ * those rendered outside the card-panel component (e.g. settings tables).
+ */
+.form-control,
+.form-select {
+  background-color: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #f8f9fa;
+}
+
+.form-control:focus,
+.form-select:focus {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(13, 110, 253, 0.55);
+  color: #fff;
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.form-control::placeholder,
+.form-select::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+input.form-control:-webkit-autofill,
+textarea.form-control:-webkit-autofill,
+select.form-select:-webkit-autofill {
+  -webkit-text-fill-color: #fff;
+  transition: background-color 5000s ease-in-out 0s;
+  box-shadow: 0 0 0px 1000px rgba(255, 255, 255, 0.08) inset;
+}
+
 .card-panel .form-control,
 .card-panel .form-select,
 .card-panel .form-control:focus,
