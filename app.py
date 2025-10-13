@@ -456,7 +456,31 @@ announcements = load_announcements()
 settings = load_settings()
 
 listeners = []
+CACHE_MAX_ENTRIES = 128
+GEOCODE_CACHE_TTL = timedelta(minutes=30)
+REVERSE_GEOCODE_CACHE_TTL = timedelta(minutes=30)
 weather_cache = {'data': None, 'expires': None}
+geocode_cache = {}
+reverse_geocode_cache = {}
+
+
+def _cache_get(cache, key):
+    entry = cache.get(key)
+    if not entry:
+        return None, False
+    value, expires, _ = entry
+    if expires and expires > datetime.now(timezone.utc):
+        return value, True
+    cache.pop(key, None)
+    return None, False
+
+
+def _cache_set(cache, key, value, ttl):
+    now = datetime.now(timezone.utc)
+    cache[key] = (value, now + ttl if ttl else None, now)
+    if len(cache) > CACHE_MAX_ENTRIES:
+        oldest_key = min(cache.items(), key=lambda item: item[1][2])[0]
+        cache.pop(oldest_key, None)
 
 
 def notify_change():
@@ -507,16 +531,25 @@ def events():
 
 
 def geocode(address):
-    if not address:
+    if not address or not isinstance(address, str):
         return None, None
-    query = parse.urlencode({'q': address, 'format': 'json'})
+    normalised = ' '.join(address.split())
+    if not normalised:
+        return None, None
+    cache_key = normalised.lower()
+    cached, found = _cache_get(geocode_cache, cache_key)
+    if found:
+        return cached
+    query = parse.urlencode({'q': normalised, 'format': 'json'})
     url = f"https://nominatim.openstreetmap.org/search?{query}"
     try:
         req = urlrequest.Request(url, headers={'User-Agent': 'Alarmmonitor/1.0'})
         with urlrequest.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode('utf-8'))
             if data:
-                return float(data[0]['lat']), float(data[0]['lon'])
+                result = float(data[0]['lat']), float(data[0]['lon'])
+                _cache_set(geocode_cache, cache_key, result, GEOCODE_CACHE_TTL)
+                return result
     except Exception:
         pass
     return None, None
@@ -530,6 +563,10 @@ def reverse_geocode(lat, lon):
         lon = float(lon)
     except (TypeError, ValueError):
         return None
+    cache_key = (round(lat, 5), round(lon, 5))
+    cached, found = _cache_get(reverse_geocode_cache, cache_key)
+    if found:
+        return cached
     query = parse.urlencode(
         {
             'lat': lat,
@@ -546,6 +583,12 @@ def reverse_geocode(lat, lon):
             if isinstance(data, dict):
                 display = data.get('display_name')
                 if display:
+                    _cache_set(
+                        reverse_geocode_cache,
+                        cache_key,
+                        display,
+                        REVERSE_GEOCODE_CACHE_TTL,
+                    )
                     return display
     except Exception:
         pass
