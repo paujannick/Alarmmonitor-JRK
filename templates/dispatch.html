@@ -140,6 +140,16 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
       </div>
       <div class="modal-body">
+        <form id="location-picker-search" class="location-picker-search row g-2 align-items-end" autocomplete="off">
+          <div class="col-sm-8">
+            <label class="form-label" for="location-picker-search-input">Ort suchen</label>
+            <input type="text" class="form-control" id="location-picker-search-input" placeholder="z.&nbsp;B. Schwimmbad Lich">
+          </div>
+          <div class="col-sm-4 d-grid">
+            <button type="submit" class="btn btn-outline-light">Suchen</button>
+          </div>
+        </form>
+        <div id="location-picker-results" class="location-picker-results list-group d-none mb-3" role="listbox" aria-label="Suchergebnisse"></div>
         <div id="location-picker-map" class="location-picker-map" role="application" aria-label="Einsatzort auswählen"></div>
         <p id="location-picker-status" class="location-picker-status text-white-50 small mt-3 mb-0">Klicken Sie auf die Karte, um einen Einsatzort zu setzen.</p>
       </div>
@@ -290,6 +300,11 @@ const locationPickerModalEl = document.getElementById('location-picker-modal');
 const locationPickerApply = document.getElementById('location-picker-apply');
 const locationPickerSelection = document.getElementById('location-picker-selection');
 const locationPickerStatus = document.getElementById('location-picker-status');
+const locationPickerSearchForm = document.getElementById('location-picker-search');
+const locationPickerSearchInput = document.getElementById('location-picker-search-input');
+const locationPickerResults = document.getElementById('location-picker-results');
+const MODAL_STACK_CLASS = 'modal-stack-top';
+const MODAL_BACKDROP_STACK_CLASS = 'modal-backdrop-stack-top';
 const incidentLocationInput = document.getElementById('incident-location');
 const incidentLatInput = document.getElementById('incident-lat');
 const incidentLonInput = document.getElementById('incident-lon');
@@ -303,6 +318,7 @@ let locationPickerModal = null;
 let locationPickerLatLng = null;
 let locationPickerAddress = '';
 let locationPickerRequestId = 0;
+let locationPickerSearchAbort = null;
 
 function escapeHtml(value) {
   if (value === null || value === undefined) return '';
@@ -391,6 +407,52 @@ function updateLocationSelectionDisplay({ address, lat, lon }) {
   }
 }
 
+function clearLocationSearchResults() {
+  if (!locationPickerResults) return;
+  locationPickerResults.innerHTML = '';
+  locationPickerResults.classList.add('d-none');
+}
+
+function renderLocationSearchResults(results) {
+  if (!locationPickerResults) return;
+  clearLocationSearchResults();
+  if (!Array.isArray(results) || !results.length) {
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  results.forEach((result, index) => {
+    if (!result) return;
+    const latValue = parseFloat(result.lat);
+    const lonValue = parseFloat(result.lon);
+    if (!Number.isFinite(latValue) || !Number.isFinite(lonValue)) return;
+    const label = result.name || result.display_name || `Treffer ${index + 1}`;
+    const description = result.display_name && result.display_name !== label ? result.display_name : '';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'list-group-item list-group-item-action';
+    button.dataset.role = 'location-result';
+    button.dataset.lat = String(latValue);
+    button.dataset.lon = String(lonValue);
+    button.dataset.label = description || label;
+    button.innerHTML = `
+      <div class="location-picker-result__name">${escapeHtml(label)}</div>
+      ${description ? `<div class="location-picker-result__desc">${escapeHtml(description)}</div>` : ''}
+    `;
+    fragment.appendChild(button);
+  });
+  if (!fragment.childNodes.length) {
+    return;
+  }
+  locationPickerResults.appendChild(fragment);
+  locationPickerResults.classList.remove('d-none');
+}
+
+function markStackedBackdrop() {
+  const backdrops = document.querySelectorAll('.modal-backdrop');
+  if (!backdrops.length) return;
+  backdrops[backdrops.length - 1].classList.add(MODAL_BACKDROP_STACK_CLASS);
+}
+
 async function fetchLocationAddress(lat, lon) {
   locationPickerRequestId += 1;
   const requestId = locationPickerRequestId;
@@ -429,8 +491,58 @@ async function fetchLocationAddress(lat, lon) {
   }
 }
 
+async function performLocationSearch(query) {
+  if (!locationPickerSearchInput) return;
+  const trimmed = (query || '').trim();
+  if (!trimmed) {
+    clearLocationSearchResults();
+    if (locationPickerStatus) {
+      locationPickerStatus.textContent = LOCATION_STATUS_DEFAULT;
+    }
+    return;
+  }
+  if (locationPickerSearchAbort) {
+    locationPickerSearchAbort.abort();
+    locationPickerSearchAbort = null;
+  }
+  const controller = new AbortController();
+  locationPickerSearchAbort = controller;
+  try {
+    if (locationPickerStatus) {
+      locationPickerStatus.textContent = 'Suche läuft…';
+    }
+    const response = await fetch(`/api/geocode/search?q=${encodeURIComponent(trimmed)}`, {
+      signal: controller.signal,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data || data.ok === false) {
+      const message = (data && data.error) || 'Suche fehlgeschlagen.';
+      throw new Error(message);
+    }
+    const results = Array.isArray(data.results) ? data.results : [];
+    renderLocationSearchResults(results);
+    if (locationPickerStatus) {
+      locationPickerStatus.textContent = results.length
+        ? 'Treffer gefunden. Bitte auswählen oder auf die Karte klicken.'
+        : 'Keine Treffer gefunden.';
+    }
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      return;
+    }
+    clearLocationSearchResults();
+    if (locationPickerStatus) {
+      locationPickerStatus.textContent = error.message || 'Suche fehlgeschlagen.';
+    }
+  } finally {
+    if (locationPickerSearchAbort === controller) {
+      locationPickerSearchAbort = null;
+    }
+  }
+}
+
 function setLocationMarker(latlng, options = {}) {
-  const { fetchAddress = true, address = '' } = options;
+  const { fetchAddress = true, address = '', zoom = null, panTo = true } = options;
   locationPickerLatLng = latlng;
   if (address) {
     locationPickerAddress = address;
@@ -449,6 +561,11 @@ function setLocationMarker(latlng, options = {}) {
     locationPickerApply.disabled = false;
   }
   updateLocationPopup(latlng.lat, latlng.lng);
+  if (panTo && locationPickerMap) {
+    const currentZoom = locationPickerMap.getZoom();
+    const targetZoom = Number.isFinite(zoom) ? zoom : currentZoom;
+    locationPickerMap.setView([latlng.lat, latlng.lng], targetZoom);
+  }
   if (fetchAddress) {
     fetchLocationAddress(latlng.lat, latlng.lng);
   } else if (locationPickerStatus) {
@@ -477,6 +594,16 @@ if (incidentLocationInput) {
 if (locationPickerModalEl) {
   locationPickerModal = new bootstrap.Modal(locationPickerModalEl);
   locationPickerModalEl.addEventListener('show.bs.modal', () => {
+    locationPickerModalEl.classList.add(MODAL_STACK_CLASS);
+    setTimeout(markStackedBackdrop, 0);
+    if (locationPickerSearchAbort) {
+      locationPickerSearchAbort.abort();
+      locationPickerSearchAbort = null;
+    }
+    if (locationPickerSearchInput) {
+      locationPickerSearchInput.value = '';
+    }
+    clearLocationSearchResults();
     if (locationPickerStatus) {
       locationPickerStatus.textContent = LOCATION_STATUS_DEFAULT;
     }
@@ -494,9 +621,6 @@ if (locationPickerModalEl) {
     if (Number.isFinite(latValue) && Number.isFinite(lonValue)) {
       const existingAddress = incidentLocationInput ? incidentLocationInput.value.trim() : '';
       setLocationMarker({ lat: latValue, lng: lonValue }, { fetchAddress: !existingAddress, address: existingAddress });
-      if (mapInstance) {
-        mapInstance.setView([latValue, lonValue], mapInstance.getZoom());
-      }
     } else {
       locationPickerLatLng = null;
       locationPickerAddress = '';
@@ -515,6 +639,14 @@ if (locationPickerModalEl) {
   locationPickerModalEl.addEventListener('hidden.bs.modal', () => {
     if (locationPickerStatus) {
       locationPickerStatus.textContent = LOCATION_STATUS_DEFAULT;
+    }
+    locationPickerModalEl.classList.remove(MODAL_STACK_CLASS);
+    document
+      .querySelectorAll(`.${MODAL_BACKDROP_STACK_CLASS}`)
+      .forEach(backdrop => backdrop.classList.remove(MODAL_BACKDROP_STACK_CLASS));
+    if (locationPickerSearchAbort) {
+      locationPickerSearchAbort.abort();
+      locationPickerSearchAbort = null;
     }
   });
 }
@@ -559,6 +691,43 @@ function openLocationPicker() {
 if (locationPickerApply) {
   locationPickerApply.addEventListener('click', () => {
     applyLocationSelection();
+  });
+}
+
+if (locationPickerSearchForm && locationPickerSearchInput) {
+  locationPickerSearchForm.addEventListener('submit', event => {
+    event.preventDefault();
+    performLocationSearch(locationPickerSearchInput.value || '');
+  });
+  locationPickerSearchInput.addEventListener('input', () => {
+    if (!locationPickerSearchInput.value.trim()) {
+      clearLocationSearchResults();
+      if (locationPickerStatus) {
+        locationPickerStatus.textContent = LOCATION_STATUS_DEFAULT;
+      }
+    }
+  });
+}
+
+if (locationPickerResults) {
+  locationPickerResults.addEventListener('click', event => {
+    const button = event.target.closest('[data-role="location-result"]');
+    if (!button) return;
+    const lat = parseFloat(button.dataset.lat);
+    const lon = parseFloat(button.dataset.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    const label = button.dataset.label || '';
+    locationPickerResults
+      .querySelectorAll('.list-group-item')
+      .forEach(item => item.classList.remove('active'));
+    button.classList.add('active');
+    setLocationMarker({ lat, lng: lon }, { fetchAddress: false, address: label, zoom: 16 });
+    if (locationPickerStatus) {
+      locationPickerStatus.textContent = 'Standort aus Suche übernommen.';
+    }
+    if (locationPickerSearchInput && label) {
+      locationPickerSearchInput.value = label;
+    }
   });
 }
 
