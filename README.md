@@ -33,22 +33,26 @@ Die Audiodatei ist aus dem Repository ausgeschlossen. Lege eine passende
 
 ### Automatischer Neustart (systemd)
 
-Damit der Dienst nach einem Absturz oder Neustart des Raspberry Pi automatisch
-wieder gestartet wird, kann die beiliegende systemd-Unit verwendet werden:
+Das Skript `setup_autostart.sh` richtet den Dienst vollständig ein: Es kopiert
+den Quellcode nach `/opt/alarmmonitor` (oder ein optional übergebenes
+Zielverzeichnis), installiert die Abhängigkeiten im Ziel und erstellt sowie
+aktiviert eine passende `systemd`-Unit. Ausführen mit:
 
-1. Datei `systemd/alarmmonitor.service` nach `/etc/systemd/system/`
-   kopieren und Pfade (`WorkingDirectory`, `ExecStart`) sowie Benutzer/Gruppe
-   an die eigene Umgebung anpassen.
-2. Dienst aktivieren und starten:
+```bash
+./setup_autostart.sh
+```
 
-   ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl enable alarmmonitor.service
-   sudo systemctl start alarmmonitor.service
-   ```
+Standardmäßig läuft der Dienst unter dem Benutzer, der das Skript aufruft (bei
+`sudo` wird automatisch `SUDO_USER` verwendet). Ein anderes Zielverzeichnis
+kann als Parameter übergeben werden:
 
-Systemd sorgt anschließend dafür, dass die Anwendung bei Fehlern automatisch
-neu gestartet wird.
+```bash
+./setup_autostart.sh /srv/alarmmonitor
+```
+
+Nach erfolgreichem Durchlauf ist der Dienst `alarmmonitor.service` bereits
+aktiviert und gestartet. Die zuvor mitgelieferte Beispiel-Unit liegt weiterhin
+unter `systemd/alarmmonitor.service`, falls sie separat angepasst werden soll.
 
 ## Update
 ```bash
