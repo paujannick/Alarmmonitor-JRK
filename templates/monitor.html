@@ -133,6 +133,7 @@ let incidentAutoScrollHandle = null;
 let incidentAutoScrollDirection = 1;
 let incidentAutoScrollLastTimestamp = null;
 let incidentAutoScrollRefreshHandle = null;
+let incidentAutoScrollResidual = 0;
 const tableContainer = document.getElementById('vehicle-table-container');
 const vehicleTableEl = document.getElementById('vehicle-table');
 let vehicleTableBaseFontSize = null;
@@ -424,6 +425,7 @@ function stopIncidentAutoScroll() {
         incidentAutoScrollRefreshHandle = null;
     }
     incidentAutoScrollLastTimestamp = null;
+    incidentAutoScrollResidual = 0;
 }
 
 function runIncidentAutoScroll(timestamp) {
@@ -443,17 +445,29 @@ function runIncidentAutoScroll(timestamp) {
     const deltaSeconds = (timestamp - incidentAutoScrollLastTimestamp) / 1000;
     incidentAutoScrollLastTimestamp = timestamp;
     const offset = deltaSeconds * INCIDENT_AUTO_SCROLL_SPEED * incidentAutoScrollDirection;
-    let nextTop = incidentListEl.scrollTop + offset;
-    if (nextTop <= 0) {
-        nextTop = 0;
-        incidentAutoScrollDirection = 1;
-        incidentAutoScrollLastTimestamp = timestamp;
-    } else if (nextTop >= maxScroll) {
-        nextTop = maxScroll;
-        incidentAutoScrollDirection = -1;
-        incidentAutoScrollLastTimestamp = timestamp;
+    incidentAutoScrollResidual += offset;
+    let wholeOffset = 0;
+    if (incidentAutoScrollResidual >= 1) {
+        wholeOffset = Math.floor(incidentAutoScrollResidual);
+    } else if (incidentAutoScrollResidual <= -1) {
+        wholeOffset = Math.ceil(incidentAutoScrollResidual);
     }
-    incidentListEl.scrollTop = nextTop;
+    if (wholeOffset !== 0) {
+        incidentAutoScrollResidual -= wholeOffset;
+        let nextTop = incidentListEl.scrollTop + wholeOffset;
+        if (nextTop <= 0) {
+            nextTop = 0;
+            incidentAutoScrollDirection = 1;
+            incidentAutoScrollLastTimestamp = timestamp;
+            incidentAutoScrollResidual = 0;
+        } else if (nextTop >= maxScroll) {
+            nextTop = maxScroll;
+            incidentAutoScrollDirection = -1;
+            incidentAutoScrollLastTimestamp = timestamp;
+            incidentAutoScrollResidual = 0;
+        }
+        incidentListEl.scrollTop = nextTop;
+    }
     incidentAutoScrollHandle = requestAnimationFrame(runIncidentAutoScroll);
 }
 
@@ -466,6 +480,7 @@ function startIncidentAutoScroll() {
     }
     incidentAutoScrollDirection = 1;
     incidentAutoScrollLastTimestamp = null;
+    incidentAutoScrollResidual = 0;
     incidentAutoScrollHandle = requestAnimationFrame(runIncidentAutoScroll);
 }
 
