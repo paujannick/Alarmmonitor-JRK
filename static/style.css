@@ -8,6 +8,58 @@ body {
   color: #fff;
 }
 
+:root {
+  color-scheme: dark;
+}
+
+.card,
+.list-group,
+.dropdown-menu {
+  background-color: rgba(18, 18, 18, 0.92);
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.card .card-header,
+.card .card-footer {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.dropdown-item {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus,
+.dropdown-item.active {
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.alert {
+  background-color: rgba(255, 255, 255, 0.06);
+  color: #f8f9fa;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.alert-success {
+  background-color: rgba(25, 135, 84, 0.25);
+  border-color: rgba(25, 135, 84, 0.45);
+  color: #d1f2e5;
+}
+
+.alert-danger {
+  background-color: rgba(220, 53, 69, 0.28);
+  border-color: rgba(220, 53, 69, 0.5);
+  color: #ffd7dc;
+}
+
+.alert-warning {
+  background-color: rgba(255, 193, 7, 0.22);
+  border-color: rgba(255, 193, 7, 0.45);
+  color: #fff4d1;
+}
+
 .page-header h1 {
   font-size: clamp(1.8rem, 4vw, 2.6rem);
   font-weight: 600;
@@ -45,6 +97,36 @@ body {
 
 .card-panel .card-body {
   padding: 1.5rem;
+}
+
+.card-panel label,
+.card-panel .form-label,
+.card-panel .form-check-label,
+.card-panel .form-text {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.card-panel .text-body-secondary {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+.card-panel .form-control::placeholder,
+.card-panel .form-select::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.card-panel .form-check-input {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.card-panel .form-check-input:checked {
+  background-color: rgba(13, 110, 253, 0.85);
+  border-color: rgba(13, 110, 253, 0.85);
+}
+
+.card-panel .form-check-input:focus {
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.35);
 }
 
 .card-panel .form-control,
@@ -89,6 +171,22 @@ body {
 
 .card-panel .table {
   color: rgba(255, 255, 255, 0.88);
+}
+
+.table {
+  color: rgba(255, 255, 255, 0.88);
+  background-color: transparent;
+}
+
+.table thead th,
+.table thead td {
+  color: rgba(255, 255, 255, 0.65);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.table tbody td,
+.table tbody th {
+  border-color: rgba(255, 255, 255, 0.05);
 }
 
 .card-panel .table thead th {
