@@ -128,6 +128,11 @@ const vehicleMarkers = {};
 const incidentMarkers = {};
 const incidentListEl = document.getElementById('active-incident-list');
 const incidentSummaryEl = document.getElementById('active-incident-summary');
+const INCIDENT_AUTO_SCROLL_SPEED = 14; // pixels per second
+let incidentAutoScrollHandle = null;
+let incidentAutoScrollDirection = 1;
+let incidentAutoScrollLastTimestamp = null;
+let incidentAutoScrollRefreshHandle = null;
 const tableContainer = document.getElementById('vehicle-table-container');
 const vehicleTableEl = document.getElementById('vehicle-table');
 let vehicleTableBaseFontSize = null;
@@ -251,6 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(resizeMap, 200);
     adjustVehicleTableSize();
     setTimeout(adjustVehicleTableSize, 250);
+    scheduleIncidentAutoScrollRefresh();
 });
 
 if (tableContainer) {
@@ -260,6 +266,13 @@ if (tableContainer) {
         tableResizeObserver.observe(tableContainer);
     }
 }
+
+if (incidentListEl && 'ResizeObserver' in window) {
+    const incidentResizeObserver = new ResizeObserver(() => scheduleIncidentAutoScrollRefresh());
+    incidentResizeObserver.observe(incidentListEl);
+}
+
+window.addEventListener('resize', () => scheduleIncidentAutoScrollRefresh());
 
 if (vehicleTableEl && vehicleTableEl.tBodies && vehicleTableEl.tBodies[0] && 'MutationObserver' in window) {
     const tableMutationObserver = new MutationObserver(() => adjustVehicleTableSize());
@@ -285,6 +298,8 @@ function renderActiveIncidents(incidents) {
         if (incidentSummaryEl) {
             incidentSummaryEl.textContent = 'Keine aktiven Einsätze';
         }
+        stopIncidentAutoScroll();
+        container.scrollTop = 0;
         return;
     }
     const sorted = active
@@ -396,6 +411,70 @@ function renderActiveIncidents(incidents) {
             ? '1 aktiver Einsatz'
             : `${active.length} aktive Einsätze`;
     }
+    scheduleIncidentAutoScrollRefresh();
+}
+
+function stopIncidentAutoScroll() {
+    if (incidentAutoScrollHandle !== null) {
+        cancelAnimationFrame(incidentAutoScrollHandle);
+        incidentAutoScrollHandle = null;
+    }
+    if (incidentAutoScrollRefreshHandle !== null) {
+        cancelAnimationFrame(incidentAutoScrollRefreshHandle);
+        incidentAutoScrollRefreshHandle = null;
+    }
+    incidentAutoScrollLastTimestamp = null;
+}
+
+function runIncidentAutoScroll(timestamp) {
+    if (!incidentListEl) {
+        stopIncidentAutoScroll();
+        return;
+    }
+    const maxScroll = incidentListEl.scrollHeight - incidentListEl.clientHeight;
+    if (maxScroll <= 0) {
+        incidentListEl.scrollTop = 0;
+        stopIncidentAutoScroll();
+        return;
+    }
+    if (incidentAutoScrollLastTimestamp === null) {
+        incidentAutoScrollLastTimestamp = timestamp;
+    }
+    const deltaSeconds = (timestamp - incidentAutoScrollLastTimestamp) / 1000;
+    incidentAutoScrollLastTimestamp = timestamp;
+    const offset = deltaSeconds * INCIDENT_AUTO_SCROLL_SPEED * incidentAutoScrollDirection;
+    let nextTop = incidentListEl.scrollTop + offset;
+    if (nextTop <= 0) {
+        nextTop = 0;
+        incidentAutoScrollDirection = 1;
+        incidentAutoScrollLastTimestamp = timestamp;
+    } else if (nextTop >= maxScroll) {
+        nextTop = maxScroll;
+        incidentAutoScrollDirection = -1;
+        incidentAutoScrollLastTimestamp = timestamp;
+    }
+    incidentListEl.scrollTop = nextTop;
+    incidentAutoScrollHandle = requestAnimationFrame(runIncidentAutoScroll);
+}
+
+function startIncidentAutoScroll() {
+    stopIncidentAutoScroll();
+    if (!incidentListEl) return;
+    if (incidentListEl.scrollHeight <= incidentListEl.clientHeight + 1) {
+        incidentListEl.scrollTop = 0;
+        return;
+    }
+    incidentAutoScrollDirection = 1;
+    incidentAutoScrollLastTimestamp = null;
+    incidentAutoScrollHandle = requestAnimationFrame(runIncidentAutoScroll);
+}
+
+function scheduleIncidentAutoScrollRefresh() {
+    if (incidentAutoScrollRefreshHandle !== null) return;
+    incidentAutoScrollRefreshHandle = requestAnimationFrame(() => {
+        incidentAutoScrollRefreshHandle = null;
+        startIncidentAutoScroll();
+    });
 }
 
 function unlockAudio() {

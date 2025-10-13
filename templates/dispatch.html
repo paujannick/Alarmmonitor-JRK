@@ -330,13 +330,20 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function formatCoordinatePair(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return '';
+  return `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+}
+
 function createLocationPopupContent({ address, lat, lon }) {
   const parts = [];
   if (address) {
     parts.push(`<div class="location-picker-popup__address">${escapeHtml(address)}</div>`);
   }
-  if (Number.isFinite(lat) && Number.isFinite(lon)) {
-    parts.push(`<div class="location-picker-popup__coords">Koordinaten: ${lat.toFixed(5)}, ${lon.toFixed(5)}</div>`);
+  const coordsPair = formatCoordinatePair(lat, lon);
+  if (coordsPair) {
+    const prefix = address ? 'Koordinaten: ' : '';
+    parts.push(`<div class="location-picker-popup__coords">${prefix}${coordsPair}</div>`);
   }
   parts.push('<div class="mt-2"><button type="button" class="btn btn-primary btn-sm" data-role="apply-location">Standort übernehmen</button></div>');
   return `<div class="location-picker-popup">${parts.join('')}</div>`;
@@ -396,10 +403,12 @@ function ensureLocationPickerMap() {
 
 function updateLocationSelectionDisplay({ address, lat, lon }) {
   if (!locationPickerSelection) return;
-  const coordsAreNumbers = Number.isFinite(lat) && Number.isFinite(lon);
-  const coordsText = coordsAreNumbers ? `Koordinaten: ${lat.toFixed(5)}, ${lon.toFixed(5)}` : '';
+  const coordsPair = formatCoordinatePair(lat, lon);
+  const coordsText = address && coordsPair ? `Koordinaten: ${coordsPair}` : coordsPair;
   if (address) {
-    locationPickerSelection.textContent = `Adresse: ${address}\n${coordsText}`;
+    locationPickerSelection.textContent = coordsText
+      ? `Adresse: ${address}\n${coordsText}`
+      : `Adresse: ${address}`;
   } else if (coordsText) {
     locationPickerSelection.textContent = coordsText;
   } else {
@@ -656,7 +665,8 @@ function applyLocationSelection() {
   const lat = locationPickerLatLng.lat;
   const lon = locationPickerLatLng.lng;
   if (incidentLocationInput) {
-    incidentLocationInput.value = locationPickerAddress || `Koordinaten ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    const coordsPair = formatCoordinatePair(lat, lon);
+    incidentLocationInput.value = locationPickerAddress || coordsPair;
   }
   if (incidentLatInput) {
     incidentLatInput.value = lat.toFixed(6);
