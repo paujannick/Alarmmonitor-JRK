@@ -459,9 +459,11 @@ listeners = []
 CACHE_MAX_ENTRIES = 128
 GEOCODE_CACHE_TTL = timedelta(minutes=30)
 REVERSE_GEOCODE_CACHE_TTL = timedelta(minutes=30)
+GEOCODE_SEARCH_CACHE_TTL = timedelta(minutes=15)
 weather_cache = {'data': None, 'expires': None}
 geocode_cache = {}
 reverse_geocode_cache = {}
+geocode_search_cache = {}
 
 
 def _cache_get(cache, key):
@@ -1329,6 +1331,78 @@ def api_update_network_settings():
     settings['network'] = network_settings
     save_settings()
     return jsonify({'ok': True, 'network': network_settings})
+
+
+@app.route('/api/geocode/search')
+def api_geocode_search():
+    query = (request.args.get('q') or '').strip()
+    normalised = ' '.join(query.split())
+    if len(normalised) < 3:
+        return jsonify({'ok': False, 'error': 'Bitte mindestens drei Zeichen eingeben.'}), 400
+    limit_param = request.args.get('limit', '5')
+    try:
+        limit = max(1, min(int(limit_param), 10))
+    except (TypeError, ValueError):
+        limit = 5
+    cache_key = (normalised.lower(), limit)
+    cached, found = _cache_get(geocode_search_cache, cache_key)
+    if found:
+        return jsonify({'ok': True, 'results': cached})
+    params = {
+        'q': normalised,
+        'format': 'jsonv2',
+        'addressdetails': 1,
+        'limit': limit,
+    }
+    operation_area = settings.get('operation_area') or {}
+    lat = operation_area.get('lat')
+    lon = operation_area.get('lon')
+    try:
+        lat_value = float(lat)
+        lon_value = float(lon)
+    except (TypeError, ValueError):
+        lat_value = lon_value = None
+    if lat_value is not None and lon_value is not None:
+        lat_span = 0.45
+        lon_span = 0.65
+        params['viewbox'] = f"{lon_value - lon_span},{lat_value + lat_span},{lon_value + lon_span},{lat_value - lat_span}"
+        params['bounded'] = 1
+    query_string = parse.urlencode(params)
+    url = f"https://nominatim.openstreetmap.org/search?{query_string}"
+    try:
+        req = urlrequest.Request(
+            url,
+            headers={'User-Agent': 'Alarmmonitor/1.0', 'Accept-Language': 'de'},
+        )
+        with urlrequest.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+    except Exception as exc:
+        app.logger.warning('Geocoding search failed: %s', exc)
+        return jsonify({'ok': False, 'error': 'Die Suche ist fehlgeschlagen.'}), 502
+    results = []
+    if isinstance(data, list):
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            try:
+                lat_result = float(item.get('lat'))
+                lon_result = float(item.get('lon'))
+            except (TypeError, ValueError):
+                continue
+            display_name = item.get('display_name') or ''
+            name = item.get('name') or ''
+            results.append(
+                {
+                    'name': name or (display_name.split(',')[0].strip() if display_name else ''),
+                    'display_name': display_name,
+                    'lat': lat_result,
+                    'lon': lon_result,
+                    'type': item.get('type') or '',
+                    'category': item.get('class') or '',
+                }
+            )
+    _cache_set(geocode_search_cache, cache_key, results, GEOCODE_SEARCH_CACHE_TTL)
+    return jsonify({'ok': True, 'results': results})
 
 
 @app.route('/api/geocode/reverse')
