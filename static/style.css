@@ -137,14 +137,14 @@ body {
  */
 .form-control,
 .form-select {
-  background-color: rgba(255, 255, 255, 0.04);
+  background-color: rgba(18, 18, 18, 0.85);
   border-color: rgba(255, 255, 255, 0.16);
   color: #f8f9fa;
 }
 
 .form-control:focus,
 .form-select:focus {
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: rgba(24, 24, 24, 0.92);
   border-color: rgba(13, 110, 253, 0.55);
   color: #fff;
   box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
@@ -160,14 +160,14 @@ textarea.form-control:-webkit-autofill,
 select.form-select:-webkit-autofill {
   -webkit-text-fill-color: #fff;
   transition: background-color 5000s ease-in-out 0s;
-  box-shadow: 0 0 0px 1000px rgba(255, 255, 255, 0.08) inset;
+  box-shadow: 0 0 0px 1000px rgba(18, 18, 18, 0.9) inset;
 }
 
 .card-panel .form-control,
 .card-panel .form-select,
 .card-panel .form-control:focus,
 .card-panel .form-select:focus {
-  background-color: rgba(255, 255, 255, 0.04);
+  background-color: rgba(18, 18, 18, 0.85);
   border-color: rgba(255, 255, 255, 0.16);
   color: #fff;
 }
@@ -952,7 +952,7 @@ tr.status-9 .status-color {
 .form-control,
 .form-select {
   color: rgba(255, 255, 255, 0.92);
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: rgba(18, 18, 18, 0.85);
   border-color: rgba(255, 255, 255, 0.2);
 }
 
@@ -964,7 +964,7 @@ tr.status-9 .status-color {
 .form-control:focus,
 .form-select:focus {
   color: #fff;
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: rgba(24, 24, 24, 0.92);
   border-color: rgba(13, 110, 253, 0.6);
   box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
 }
