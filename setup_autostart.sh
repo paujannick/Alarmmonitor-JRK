@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_ROOT="$SCRIPT_DIR"
-TARGET_DIR="${1:-/opt/alarmmonitor}"
+TARGET_DIR="$PROJECT_ROOT"
 SERVICE_NAME="alarmmonitor"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 
@@ -72,34 +72,11 @@ run_as_service_user() {
   fi
 }
 
-copy_project() {
-  echo "\n📂 Kopiere Projekt nach $TARGET_DIR"
-  if command -v rsync >/dev/null 2>&1; then
-    $SUDO mkdir -p "$TARGET_DIR"
-    $SUDO rsync -a --delete \
-      --exclude '.git' \
-      --exclude 'venv' \
-      --exclude '.venv' \
-      --exclude '__pycache__/' \
-      --exclude '*.pyc' \
-      "$PROJECT_ROOT/" "$TARGET_DIR/"
-  else
-    echo "rsync nicht gefunden, verwende tar zum Kopieren" >&2
-    if ! command -v tar >/dev/null 2>&1; then
-      echo "Weder rsync noch tar sind verfügbar." >&2
-      exit 1
-    fi
-    $SUDO rm -rf "$TARGET_DIR"
-    $SUDO mkdir -p "$TARGET_DIR"
-    (
-      cd "$PROJECT_ROOT"
-      tar cf - . \
-        --exclude='./.git' \
-        --exclude='./venv' \
-        --exclude='./.venv' \
-        --exclude='*/__pycache__' \
-        --exclude='*.pyc'
-    ) | $SUDO tar xf - -C "$TARGET_DIR"
+prepare_project_directory() {
+  echo "\n📂 Verwende Projektverzeichnis $TARGET_DIR"
+  if [[ "$TARGET_DIR" != "$PROJECT_ROOT" ]]; then
+    echo "Das Projekt muss im ursprünglichen Git-Verzeichnis bleiben." >&2
+    exit 1
   fi
   $SUDO chown -R "$SERVICE_USER:$SERVICE_GROUP" "$TARGET_DIR"
   $SUDO chmod +x "$TARGET_DIR/start.sh" "$TARGET_DIR/install.sh"
@@ -146,7 +123,7 @@ enable_service() {
 main() {
   echo "ℹ️  Dienst läuft als $SERVICE_USER:$SERVICE_GROUP"
   echo "📁 Zielverzeichnis: $TARGET_DIR"
-  copy_project
+  prepare_project_directory
   setup_virtualenv
   create_service_file
   enable_service
