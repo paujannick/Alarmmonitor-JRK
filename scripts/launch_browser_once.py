@@ -89,12 +89,14 @@ def detect_browser_command(url: str, logger: logging.Logger) -> Optional[list[st
         return command
 
     candidates: Iterable[tuple[str, list[str]]] = (
+        ('chromium-browser', ['--start-fullscreen', '--autoplay-policy=no-user-gesture-required']),
+        ('chromium', ['--start-fullscreen', '--autoplay-policy=no-user-gesture-required']),
+        ('google-chrome', ['--start-fullscreen', '--autoplay-policy=no-user-gesture-required']),
+        ('firefox', ['--fullscreen']),
         ('chromium-browser', ['--kiosk', '--autoplay-policy=no-user-gesture-required', '--noerrdialogs', '--disable-session-crashed-bubble']),
         ('chromium', ['--kiosk', '--autoplay-policy=no-user-gesture-required', '--noerrdialogs', '--disable-session-crashed-bubble']),
         ('google-chrome', ['--kiosk', '--autoplay-policy=no-user-gesture-required']),
-        ('chromium-browser', ['--start-fullscreen', '--autoplay-policy=no-user-gesture-required']),
         ('firefox', ['--kiosk']),
-        ('firefox', ['--fullscreen']),
     )
     for binary, flags in candidates:
         path = which(binary)

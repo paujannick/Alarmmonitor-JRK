@@ -114,6 +114,27 @@ const alarmSound = document.getElementById('alarm');
 const latestDiv = document.getElementById('latest-incident');
 const enableBtn = document.getElementById('enable-audio');
 const fullscreenBtn = document.getElementById('fullscreen');
+const docEl = document.documentElement;
+const requestFullscreen =
+  docEl.requestFullscreen?.bind(docEl) ||
+  docEl.webkitRequestFullscreen?.bind(docEl) ||
+  docEl.mozRequestFullScreen?.bind(docEl) ||
+  docEl.msRequestFullscreen?.bind(docEl);
+const exitFullscreen =
+  document.exitFullscreen?.bind(document) ||
+  document.webkitExitFullscreen?.bind(document) ||
+  document.mozCancelFullScreen?.bind(document) ||
+  document.msExitFullscreen?.bind(document);
+
+function getFullscreenElement() {
+  return (
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.mozFullScreenElement ||
+    document.msFullscreenElement ||
+    null
+  );
+}
 const datetimeEl = document.getElementById('datetime');
 let audioUnlocked = false;
 const ttsEl = new Audio();
@@ -531,23 +552,27 @@ function getIcon(unit) {
   return icons.default;
 }
 fullscreenBtn.addEventListener('click', () => {
-  if (document.documentElement.requestFullscreen) {
-    document.documentElement.requestFullscreen();
-  }
-});
-if (document.documentElement.requestFullscreen) {
-  document.documentElement.requestFullscreen().catch(() => {});
-}
-document.addEventListener('fullscreenchange', () => {
-  const nav = document.querySelector('nav');
-  if (document.fullscreenElement) {
-    if (nav) nav.style.display = 'none';
-    fullscreenBtn.style.display = 'none';
+  if (!requestFullscreen) return;
+  if (getFullscreenElement()) {
+    exitFullscreen?.();
   } else {
-    if (nav) nav.style.display = '';
-    fullscreenBtn.style.display = '';
+    requestFullscreen().catch(() => {});
   }
 });
+
+function updateFullscreenUi() {
+  const nav = document.querySelector('nav');
+  const isFullscreen = Boolean(getFullscreenElement());
+  if (nav) {
+    nav.style.display = isFullscreen ? 'none' : '';
+  }
+  fullscreenBtn.textContent = isFullscreen ? 'Vollbild verlassen' : 'Vollbild';
+}
+
+document.addEventListener('fullscreenchange', updateFullscreenUi);
+document.addEventListener('webkitfullscreenchange', updateFullscreenUi);
+document.addEventListener('mozfullscreenchange', updateFullscreenUi);
+document.addEventListener('MSFullscreenChange', updateFullscreenUi);
 
 function updateDateTime() {
   const now = new Date();
