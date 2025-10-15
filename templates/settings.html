@@ -1,5 +1,8 @@
 {% extends 'base.html' %}
 {% set network = app_settings.network or {} %}
+{% set monitor_settings = app_settings.monitor or {} %}
+{% set monitor_defaults = monitor_defaults or {} %}
+{% set gong_volume = monitor_settings.gong_volume if monitor_settings.gong_volume is not none else monitor_defaults.gong_volume if monitor_defaults.gong_volume is not none else 1.0 %}
 {% block content %}
 <div class="page-header d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
   <div>
@@ -79,18 +82,73 @@
         <h2 class="h5 mb-1">Monitor &amp; Anzeigen</h2>
         <p class="text-body-secondary small mb-0">Steuert die Zusatzinformationen auf dem großen Monitor.</p>
       </div>
-      <div class="card-body d-flex flex-column gap-3">
-        <div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox" id="monitor-show-weather" {% if app_settings.monitor.show_weather %}checked{% endif %}>
-          <label class="form-check-label" for="monitor-show-weather">Wetter-Kachel auf dem Monitor anzeigen</label>
-        </div>
-        <div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox" id="monitor-auto-launch-browser" {% if app_settings.monitor.auto_launch_browser %}checked{% endif %}>
-          <label class="form-check-label" for="monitor-auto-launch-browser">Browser beim Start automatisch öffnen</label>
-        </div>
-        <p class="text-body-secondary small mb-0">Blendt die Wetter-Kachel aus, wenn der verfügbare Platz für andere Kacheln benötigt wird.</p>
-        <p class="text-body-secondary small mb-0">Öffnet nach einem Neustart automatisch den Alarmmonitor im Vollbildmodus und aktiviert den Ton, wenn diese Option aktiv ist.</p>
-        <div id="monitor-settings-feedback" class="alert d-none" role="alert"></div>
+      <div class="card-body">
+        <form id="monitor-settings-form" class="d-flex flex-column gap-4" autocomplete="off">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="monitor-show-weather" name="show_weather" {% if monitor_settings.show_weather %}checked{% endif %}>
+                <label class="form-check-label" for="monitor-show-weather">Wetter-Kachel anzeigen</label>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="monitor-show-map" name="show_map" {% if monitor_settings.show_map %}checked{% endif %}>
+                <label class="form-check-label" for="monitor-show-map">Karte anzeigen</label>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="monitor-show-incidents" name="show_incidents" {% if monitor_settings.show_incidents %}checked{% endif %}>
+                <label class="form-check-label" for="monitor-show-incidents">Aktive Einsätze anzeigen</label>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="monitor-clock-seconds" name="clock_with_seconds" {% if monitor_settings.clock_with_seconds %}checked{% endif %}>
+                <label class="form-check-label" for="monitor-clock-seconds">Sekunden in der Uhr anzeigen</label>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="monitor-auto-launch-browser" name="auto_launch_browser" {% if monitor_settings.auto_launch_browser %}checked{% endif %}>
+                <label class="form-check-label" for="monitor-auto-launch-browser">Browser beim Start automatisch öffnen</label>
+              </div>
+            </div>
+          </div>
+          <div class="row g-3 align-items-center">
+            <div class="col-sm-6">
+              <label class="form-label" for="monitor-accent-color">Akzentfarbe</label>
+              <input type="color" id="monitor-accent-color" name="accent_color" class="form-control form-control-color" value="{{ monitor_settings.accent_color or monitor_defaults.accent_color or '#0d6efd' }}">
+              <div class="form-text">Bestimme die Farbe für Highlights und Buttons.</div>
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label" for="monitor-audio-mode">Audio-Modus</label>
+              <select id="monitor-audio-mode" name="audio_mode" class="form-select">
+                <option value="gong-and-tts" {% if monitor_settings.audio_mode == 'gong-and-tts' or not monitor_settings.audio_mode %}selected{% endif %}>Gong &amp; Sprachausgabe</option>
+                <option value="gong-only" {% if monitor_settings.audio_mode == 'gong-only' %}selected{% endif %}>Nur Gong</option>
+                <option value="tts-only" {% if monitor_settings.audio_mode == 'tts-only' %}selected{% endif %}>Nur Sprachausgabe</option>
+                <option value="mute" {% if monitor_settings.audio_mode == 'mute' %}selected{% endif %}>Stumm</option>
+              </select>
+              <div class="form-text">Passe die Audio-Ausgabe an die Einsatzumgebung an.</div>
+            </div>
+          </div>
+          <div class="row g-3 align-items-center">
+            <div class="col-sm-8">
+              <label class="form-label" for="monitor-gong-volume">Gong-Lautstärke</label>
+              <input type="range" class="form-range" id="monitor-gong-volume" name="gong_volume" min="0" max="100" step="5" value="{{ (gong_volume * 100)|round(0)|int }}">
+            </div>
+            <div class="col-sm-4 text-sm-end">
+              <p class="form-text mb-0"><span id="monitor-gong-volume-value">{{ (gong_volume * 100)|round(0)|int }}</span>&nbsp;%</p>
+            </div>
+          </div>
+          <p class="text-body-secondary small mb-0">Änderungen werden nach dem Speichern auf dem Monitor wirksam. Ein offenes Dashboard übernimmt die neuen Einstellungen automatisch nach dem nächsten Refresh.</p>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary">Monitor-Einstellungen speichern</button>
+            <button type="button" class="btn btn-outline-light" id="monitor-reset-defaults">Auf Standard zurücksetzen</button>
+          </div>
+          <div id="monitor-settings-feedback" class="alert d-none" role="alert"></div>
+        </form>
       </div>
     </section>
   </div>
@@ -268,14 +326,75 @@ function showFeedback(target, message, type = 'success') {
   target.dataset.timeout = timeout;
 }
 
-const monitorToggle = document.getElementById('monitor-show-weather');
-const monitorAutoLaunchToggle = document.getElementById('monitor-auto-launch-browser');
+const monitorForm = document.getElementById('monitor-settings-form');
 const monitorFeedback = document.getElementById('monitor-settings-feedback');
+const monitorDefaultsData = {{ monitor_defaults|tojson }} || {};
+const monitorAccentInput = document.getElementById('monitor-accent-color');
+const monitorAudioMode = document.getElementById('monitor-audio-mode');
+const monitorVolumeInput = document.getElementById('monitor-gong-volume');
+const monitorVolumeLabel = document.getElementById('monitor-gong-volume-value');
+const monitorResetButton = document.getElementById('monitor-reset-defaults');
 
-async function updateMonitorSetting(element, key, value) {
-  if (!element) return;
-  element.disabled = true;
-  const payload = { [key]: value };
+function hexToRgbString(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  const match = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(trimmed);
+  if (!match) return null;
+  let hex = match[1];
+  if (hex.length === 3) {
+    hex = hex.split('').map(ch => ch + ch).join('');
+  }
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  if ([r, g, b].some(component => Number.isNaN(component))) return null;
+  return `${r}, ${g}, ${b}`;
+}
+
+function applyAccentPreview(accent, rgb) {
+  if (!accent) return;
+  const target = document.body || document.documentElement;
+  if (!target || !target.style) return;
+  target.style.setProperty('--accent-color', accent);
+  const rgbValue = rgb || hexToRgbString(accent);
+  if (rgbValue) {
+    target.style.setProperty('--accent-color-rgb', rgbValue);
+  }
+}
+
+function updateVolumeLabel(value) {
+  if (!monitorVolumeLabel) return;
+  const numeric = Number(value);
+  const safeValue = Number.isFinite(numeric) ? Math.max(0, Math.min(100, Math.round(numeric))) : 0;
+  monitorVolumeLabel.textContent = String(safeValue);
+}
+
+async function submitMonitorSettings(event) {
+  event.preventDefault();
+  if (!monitorForm) return;
+  const submitButton = monitorForm.querySelector('button[type="submit"]');
+  const controlsToDisable = [submitButton, monitorResetButton];
+  controlsToDisable.forEach(btn => {
+    if (btn) {
+      btn.disabled = true;
+    }
+  });
+  const getChecked = id => Boolean(document.getElementById(id)?.checked);
+  const payload = {
+    show_weather: getChecked('monitor-show-weather'),
+    show_map: getChecked('monitor-show-map'),
+    show_incidents: getChecked('monitor-show-incidents'),
+    clock_with_seconds: getChecked('monitor-clock-seconds'),
+    auto_launch_browser: getChecked('monitor-auto-launch-browser'),
+    accent_color: monitorAccentInput ? monitorAccentInput.value : '',
+    audio_mode: monitorAudioMode ? monitorAudioMode.value : '',
+  };
+  if (monitorVolumeInput) {
+    const rawVolume = Number(monitorVolumeInput.value);
+    if (Number.isFinite(rawVolume)) {
+      payload.gong_volume = Math.max(0, Math.min(100, rawVolume)) / 100;
+    }
+  }
   try {
     const response = await fetch('/api/settings/monitor', {
       method: 'PUT',
@@ -286,32 +405,89 @@ async function updateMonitorSetting(element, key, value) {
     if (!response.ok || !data.ok) {
       throw new Error((data && data.error) || 'Monitor-Einstellungen konnten nicht gespeichert werden.');
     }
-    let message = 'Monitor-Einstellungen gespeichert.';
-    if (key === 'show_weather') {
-      message = value ? 'Die Wetter-Kachel ist nun sichtbar.' : 'Die Wetter-Kachel wurde ausgeblendet.';
-    } else if (key === 'auto_launch_browser') {
-      message = value
-        ? 'Der Browser wird beim nächsten Start automatisch geöffnet.'
-        : 'Automatisches Öffnen des Browsers wurde deaktiviert.';
+    showFeedback(monitorFeedback, 'Monitor-Einstellungen gespeichert.');
+    if (data.monitor) {
+      const monitorData = data.monitor;
+      const checkboxMap = {
+        show_weather: 'monitor-show-weather',
+        show_map: 'monitor-show-map',
+        show_incidents: 'monitor-show-incidents',
+        clock_with_seconds: 'monitor-clock-seconds',
+        auto_launch_browser: 'monitor-auto-launch-browser',
+      };
+      Object.entries(checkboxMap).forEach(([key, id]) => {
+        if (key in monitorData) {
+          const el = document.getElementById(id);
+          if (el) {
+            el.checked = Boolean(monitorData[key]);
+          }
+        }
+      });
+      if (monitorAccentInput && monitorData.accent_color) {
+        monitorAccentInput.value = monitorData.accent_color;
+      }
+      if (monitorAudioMode && monitorData.audio_mode) {
+        monitorAudioMode.value = monitorData.audio_mode;
+      }
+      if (monitorVolumeInput && monitorData.gong_volume !== undefined) {
+        const volumePercent = Math.round(Math.max(0, Math.min(1, Number(monitorData.gong_volume))) * 100);
+        monitorVolumeInput.value = String(volumePercent);
+        updateVolumeLabel(volumePercent);
+      }
+      applyAccentPreview(monitorData.accent_color, monitorData.accent_color_rgb);
     }
-    showFeedback(monitorFeedback, message);
   } catch (err) {
-    element.checked = !value;
     showFeedback(monitorFeedback, err.message || 'Monitor-Einstellungen konnten nicht gespeichert werden.', 'danger');
   } finally {
-    element.disabled = false;
+    controlsToDisable.forEach(btn => {
+      if (btn) {
+        btn.disabled = false;
+      }
+    });
   }
 }
 
-if (monitorToggle) {
-  monitorToggle.addEventListener('change', () => {
-    updateMonitorSetting(monitorToggle, 'show_weather', monitorToggle.checked);
-  });
+if (monitorForm) {
+  monitorForm.addEventListener('submit', submitMonitorSettings);
 }
 
-if (monitorAutoLaunchToggle) {
-  monitorAutoLaunchToggle.addEventListener('change', () => {
-    updateMonitorSetting(monitorAutoLaunchToggle, 'auto_launch_browser', monitorAutoLaunchToggle.checked);
+if (monitorVolumeInput) {
+  monitorVolumeInput.addEventListener('input', event => {
+    updateVolumeLabel(event.target.value);
+  });
+  updateVolumeLabel(monitorVolumeInput.value);
+}
+
+if (monitorResetButton && monitorForm) {
+  monitorResetButton.addEventListener('click', event => {
+    event.preventDefault();
+    const defaults = monitorDefaultsData || {};
+    const setChecked = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.checked = Boolean(value);
+      }
+    };
+    setChecked('monitor-show-weather', defaults.show_weather !== false);
+    setChecked('monitor-show-map', defaults.show_map !== false);
+    setChecked('monitor-show-incidents', defaults.show_incidents !== false);
+    setChecked('monitor-clock-seconds', Boolean(defaults.clock_with_seconds));
+    setChecked('monitor-auto-launch-browser', Boolean(defaults.auto_launch_browser));
+    if (monitorAccentInput) {
+      monitorAccentInput.value = defaults.accent_color || '#0d6efd';
+    }
+    if (monitorAudioMode) {
+      monitorAudioMode.value = defaults.audio_mode || 'gong-and-tts';
+    }
+    if (monitorVolumeInput) {
+      const defaultVolume = Number(defaults.gong_volume);
+      const volumePercent = Number.isFinite(defaultVolume)
+        ? Math.round(Math.max(0, Math.min(1, defaultVolume)) * 100)
+        : 100;
+      monitorVolumeInput.value = String(volumePercent);
+      updateVolumeLabel(volumePercent);
+    }
+    monitorForm.requestSubmit();
   });
 }
 

@@ -1,4 +1,9 @@
 {% extends 'base.html' %}
+{% set monitor_settings = app_settings.monitor or {} %}
+{% set monitor_defaults = monitor_defaults or {} %}
+{% set show_map = monitor_settings.show_map if monitor_settings.show_map is not none else True %}
+{% set show_incidents = monitor_settings.show_incidents if monitor_settings.show_incidents is not none else True %}
+{% set clock_with_seconds = monitor_settings.clock_with_seconds if monitor_settings.clock_with_seconds is not none else False %}
 {% block head_extra %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
@@ -24,17 +29,19 @@
       <p class="mb-0 text-white-50">Live Übersicht für Einsätze &amp; Fahrzeuge</p>
     </div>
     <div class="monitor-meta">
-      <div class="monitor-time text-end" id="datetime"></div>
-      <div class="monitor-controls">
-        <button id="enable-audio" class="btn btn-outline-light btn-sm">Ton aktivieren</button>
+      <div class="monitor-time text-end" id="datetime" aria-live="polite"></div>
+      <div class="monitor-actions">
+        <div id="audio-status" class="monitor-audio-status" role="status" aria-live="polite"></div>
         <button id="fullscreen" class="btn btn-outline-light btn-sm">Vollbild</button>
       </div>
     </div>
   </header>
   <main class="monitor-content">
+    {% if show_map %}
     <section class="monitor-map" aria-label="Karte">
       <div id="map" class="monitor-map-canvas"></div>
     </section>
+    {% endif %}
     <section class="monitor-table" aria-label="Fahrzeugstatus">
       <div id="latest-incident" class="monitor-alert alert alert-danger" role="status" style="display:none;"></div>
       <div id="vehicle-table-container" class="monitor-table-body">
@@ -58,6 +65,7 @@
         </table>
       </div>
     </section>
+    {% if show_incidents %}
     <section class="monitor-incidents" aria-label="Aktive Einsätze">
       <div class="monitor-incidents-header">
         <div>
@@ -67,6 +75,7 @@
       </div>
       <div class="monitor-incidents-body" id="active-incident-list" role="list"></div>
     </section>
+    {% endif %}
   </main>
 </div>
 <audio id="alarm" preload="auto">
@@ -79,6 +88,8 @@
 <script>
 const vehicleData = {{ vehicles|tojson }};
 const statusText = {{ status_text|tojson }};
+const monitorDefaults = {{ monitor_defaults|tojson }} || {};
+const monitorSettings = Object.assign({}, monitorDefaults, {{ monitor_settings|tojson }} || {});
 const operationAreaInitial = {{ app_settings.operation_area|tojson }} || {};
 const fallbackLat = 50.517;
 const fallbackLon = 8.816;
@@ -112,7 +123,7 @@ for (const [unit, info] of Object.entries(vehicleData)) {
 }
 const alarmSound = document.getElementById('alarm');
 const latestDiv = document.getElementById('latest-incident');
-const enableBtn = document.getElementById('enable-audio');
+const audioStatusEl = document.getElementById('audio-status');
 const fullscreenBtn = document.getElementById('fullscreen');
 const docEl = document.documentElement;
 const requestFullscreen =
@@ -136,15 +147,37 @@ function getFullscreenElement() {
   );
 }
 const datetimeEl = document.getElementById('datetime');
-let audioUnlocked = false;
+const AUDIO_PREFS = {
+  'gong-and-tts': { gong: true, tts: true },
+  'gong-only': { gong: true, tts: false },
+  'tts-only': { gong: false, tts: true },
+  'mute': { gong: false, tts: false },
+};
+const audioMode = String(monitorSettings.audio_mode || 'gong-and-tts').toLowerCase();
+const audioPrefs = AUDIO_PREFS[audioMode] || AUDIO_PREFS['gong-and-tts'];
+const requiresAudioUnlock = Boolean(audioPrefs.gong || audioPrefs.tts);
+const configuredVolume = Number(monitorSettings.gong_volume);
+const gongVolume = Number.isFinite(configuredVolume)
+  ? Math.min(1, Math.max(0, configuredVolume))
+  : 1;
+if (alarmSound) {
+  alarmSound.volume = gongVolume;
+}
+const showClockSeconds = {{ 'true' if clock_with_seconds else 'false' }};
+let audioUnlocked = !requiresAudioUnlock;
+let monitorSettingsCurrent = Object.assign({}, monitorSettings);
 const ttsEl = new Audio();
+ttsEl.volume = gongVolume;
 let lastAlarmId = null;
 const alarmQueue = [];
 let alarmProcessing = false;
 let refreshing = false;
 let refreshQueued = false;
-const map = L.map('map').setView([mapDefaultLat, mapDefaultLon], mapDefaultZoom);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '© OpenStreetMap'}).addTo(map);
+const mapContainer = document.getElementById('map');
+const map = mapContainer ? L.map('map').setView([mapDefaultLat, mapDefaultLon], mapDefaultZoom) : null;
+if (map) {
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '© OpenStreetMap'}).addTo(map);
+}
 const vehicleMarkers = {};
 const incidentMarkers = {};
 const incidentListEl = document.getElementById('active-incident-list');
@@ -179,7 +212,7 @@ function setOperationArea(area) {
     mapDefaultLat = lat;
     mapDefaultLon = lon;
     mapDefaultZoom = zoomValue;
-    if (!Object.keys(incidentMarkers).length) {
+    if (map && !Object.keys(incidentMarkers).length) {
         map.setView([mapDefaultLat, mapDefaultLon], mapDefaultZoom);
     }
     return changed;
@@ -268,10 +301,13 @@ function adjustVehicleTableSize() {
 const iconBase = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/';
 
 function resizeMap() {
+    if (!map) return;
     requestAnimationFrame(() => map.invalidateSize());
 }
-window.addEventListener('resize', resizeMap);
-window.addEventListener('load', resizeMap);
+if (map) {
+    window.addEventListener('resize', resizeMap);
+    window.addEventListener('load', resizeMap);
+}
 document.addEventListener('DOMContentLoaded', () => {
     resizeMap();
     updateAlertPadding();
@@ -513,21 +549,169 @@ function scheduleIncidentAutoScrollRefresh() {
     });
 }
 
-function unlockAudio() {
-    alarmSound.play().then(() => {
-        alarmSound.pause();
-        alarmSound.currentTime = 0;
-        audioUnlocked = true;
-        enableBtn.style.display = 'none';
-    }).catch(() => {
-        audioUnlocked = false;
-        enableBtn.style.display = '';
+let audioContext = null;
+
+function ensureAudioContext() {
+    if (!requiresAudioUnlock) return null;
+    if (audioContext) return audioContext;
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) return null;
+    try {
+        audioContext = new Ctor();
+    } catch (err) {
+        audioContext = null;
+    }
+    return audioContext;
+}
+
+function warmupAudioContext() {
+    const ctx = ensureAudioContext();
+    if (!ctx) return Promise.resolve(false);
+    if (typeof ctx.resume === 'function' && ctx.state === 'suspended') {
+        return ctx.resume().then(() => true).catch(() => false);
+    }
+    return Promise.resolve(true);
+}
+
+function playFallbackChime() {
+    const ctx = ensureAudioContext();
+    if (!ctx) return Promise.resolve(false);
+    return new Promise(resolve => {
+        try {
+            const oscillator = ctx.createOscillator();
+            const gain = ctx.createGain();
+            gain.gain.value = 0.0001;
+            oscillator.type = 'triangle';
+            oscillator.frequency.value = 880;
+            oscillator.connect(gain).connect(ctx.destination);
+            oscillator.start();
+            oscillator.stop(ctx.currentTime + 0.12);
+            oscillator.onended = () => resolve(true);
+            oscillator.onerror = () => resolve(false);
+        } catch (err) {
+            resolve(false);
+        }
     });
 }
-enableBtn.addEventListener('click', unlockAudio, {once: true});
-document.addEventListener('touchstart', unlockAudio, {once: true});
-document.addEventListener('click', unlockAudio, {once: true});
+
+function updateAudioStatus() {
+    if (!audioStatusEl) return;
+    if (!requiresAudioUnlock) {
+        const active = Boolean(audioPrefs.gong || audioPrefs.tts);
+        audioStatusEl.dataset.state = active ? 'ready' : 'muted';
+        audioStatusEl.textContent = active ? 'Audio aktiv' : 'Audio deaktiviert';
+        audioStatusEl.setAttribute('aria-label', active ? 'Audio aktiv' : 'Audio deaktiviert');
+        audioStatusEl.classList.toggle('is-clickable', false);
+        return;
+    }
+    const state = audioUnlocked ? 'ready' : 'locked';
+    audioStatusEl.dataset.state = state;
+    audioStatusEl.textContent = audioUnlocked ? 'Audio bereit' : 'Tippen für Audio';
+    audioStatusEl.setAttribute(
+        'aria-label',
+        audioUnlocked ? 'Audio aktiviert' : 'Audio gesperrt – tippen zum Aktivieren'
+    );
+    audioStatusEl.classList.toggle('is-clickable', !audioUnlocked);
+}
+
+updateAudioStatus();
+
+function hexToRgbString(value) {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    const match = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(trimmed);
+    if (!match) return null;
+    let hex = match[1];
+    if (hex.length === 3) {
+        hex = hex.split('').map(ch => ch + ch).join('');
+    }
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    if ([r, g, b].some(component => Number.isNaN(component))) return null;
+    return `${r}, ${g}, ${b}`;
+}
+
+function applyAccentColor(accent, rgb) {
+    if (!accent) return;
+    const target = document.body || document.documentElement;
+    if (!target || !target.style) return;
+    target.style.setProperty('--accent-color', accent);
+    const rgbValue = rgb || hexToRgbString(accent);
+    if (rgbValue) {
+        target.style.setProperty('--accent-color-rgb', rgbValue);
+    }
+}
+
+function monitorSettingDiffers(key, nextValue) {
+    const current = monitorSettingsCurrent[key];
+    if (key === 'gong_volume') {
+        const currentVolume = Number(current ?? monitorDefaults.gong_volume ?? 1);
+        const incoming = Number(nextValue ?? currentVolume);
+        return Math.abs(currentVolume - incoming) > 0.001;
+    }
+    if (key === 'accent_color') {
+        const currentColour = (current || '').toLowerCase();
+        const incomingColour = (nextValue || '').toLowerCase();
+        return currentColour !== incomingColour;
+    }
+    return current !== nextValue;
+}
+
+function handleMonitorSettingsUpdate(newSettings) {
+    if (!newSettings || typeof newSettings !== 'object') return;
+    const reloadKeys = ['show_map', 'show_incidents', 'audio_mode', 'gong_volume', 'clock_with_seconds', 'show_weather'];
+    const requiresReload = reloadKeys.some(key => key in newSettings && monitorSettingDiffers(key, newSettings[key]));
+    if (requiresReload) {
+        window.location.reload();
+        return;
+    }
+    if ('accent_color' in newSettings && monitorSettingDiffers('accent_color', newSettings.accent_color)) {
+        applyAccentColor(newSettings.accent_color, newSettings.accent_color_rgb);
+    }
+    monitorSettingsCurrent = Object.assign({}, monitorSettingsCurrent, newSettings);
+}
+
+function unlockAudio() {
+    if (!requiresAudioUnlock || audioUnlocked) {
+        updateAudioStatus();
+        return;
+    }
+    const attempts = [];
+    if (audioPrefs.gong && alarmSound) {
+        alarmSound.currentTime = 0;
+        attempts.push(
+            alarmSound.play()
+                .then(() => {
+                    alarmSound.pause();
+                    alarmSound.currentTime = 0;
+                    return true;
+                })
+                .catch(() => false)
+        );
+    }
+    attempts.push(warmupAudioContext().catch(() => false));
+    attempts.push(playFallbackChime().catch(() => false));
+    Promise.all(attempts).then(results => {
+        const success = results.some(Boolean);
+        audioUnlocked = success;
+        updateAudioStatus();
+    }).catch(() => {
+        audioUnlocked = false;
+        updateAudioStatus();
+    });
+}
+
+if (requiresAudioUnlock) {
+    const gestureUnlock = () => unlockAudio();
+    document.addEventListener('pointerdown', gestureUnlock, {once: true});
+    document.addEventListener('keydown', gestureUnlock, {once: true});
+}
+if (audioStatusEl) {
+    audioStatusEl.addEventListener('click', unlockAudio);
+}
 function fitMapToAll() {
+    if (!map) return;
     const markers = [
         ...Object.values(vehicleMarkers),
         ...Object.values(incidentMarkers)
@@ -582,26 +766,40 @@ document.addEventListener('mozfullscreenchange', updateFullscreenUi);
 document.addEventListener('MSFullscreenChange', updateFullscreenUi);
 
 function updateDateTime() {
+  if (!datetimeEl) return;
   const now = new Date();
-  datetimeEl.textContent = now.toLocaleString('de-DE');
+  const datePart = now.toLocaleDateString('de-DE', {
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  const timeOptions = {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: showClockSeconds ? '2-digit' : undefined,
+    hour12: false,
+  };
+  const timePart = now.toLocaleTimeString('de-DE', timeOptions).replace('.', ':');
+  datetimeEl.innerHTML = `<span class="monitor-date">${datePart}</span><span class="monitor-clock">${timePart}</span>`;
 }
 setInterval(updateDateTime, 1000);
 updateDateTime();
 function speak(text) {
     const t = (text || '').trim();
-    if (!t) return Promise.resolve();
-      if ('speechSynthesis' in window) {
-          return new Promise(resolve => {
-              const utterance = new SpeechSynthesisUtterance(t);
-              utterance.lang = 'de-DE';
-              utterance.onend = resolve;
-              utterance.onerror = resolve;
-              window.speechSynthesis.speak(utterance);
-          });
-      }
+    if (!t || !audioPrefs.tts) return Promise.resolve();
     if (!audioUnlocked) {
-        enableBtn.style.display = '';
+        updateAudioStatus();
         return Promise.resolve();
+    }
+    if ('speechSynthesis' in window && window.speechSynthesis) {
+        return new Promise(resolve => {
+            const utterance = new SpeechSynthesisUtterance(t);
+            utterance.lang = 'de-DE';
+            utterance.onend = resolve;
+            utterance.onerror = resolve;
+            window.speechSynthesis.speak(utterance);
+        });
     }
     return new Promise(resolve => {
         const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=de&q=${encodeURIComponent(t)}`;
@@ -629,7 +827,8 @@ function enqueueAlarm(item, options = {}) {
     alarmQueue.push(item);
     if (alarmProcessing) return;
     alarmProcessing = true;
-    if (!playGong) {
+    const shouldPlayGong = Boolean(playGong && audioPrefs.gong && alarmSound);
+    if (!shouldPlayGong) {
         processAlarmQueue();
         return;
     }
@@ -643,10 +842,11 @@ function enqueueAlarm(item, options = {}) {
                 };
             })
             .catch(() => {
-                processAlarmQueue();
+                playFallbackChime().finally(() => processAlarmQueue());
             });
     } else {
-        enableBtn.style.display = '';
+        updateAudioStatus();
+        unlockAudio();
         processAlarmQueue();
     }
 }
@@ -809,6 +1009,9 @@ async function refresh() {
                 fetchWeather(true);
             }
         }
+        if (settingsData && settingsData.monitor) {
+            handleMonitorSettingsUpdate(settingsData.monitor);
+        }
         setConnectionStatus(true);
         const tbody = vehicleTableEl ? vehicleTableEl.tBodies[0] : null;
         const existingRows = new Map();
@@ -856,7 +1059,7 @@ async function refresh() {
                 lastAlarmId = null;
             }
             lastAlarmIds[unit] = alarmId;
-            if (info.lat && info.lon) {
+            if (map && info.lat && info.lon) {
                 if (vehicleMarkers[unit]) {
                     vehicleMarkers[unit].setLatLng([info.lat, info.lon]);
                     vehicleMarkers[unit].setIcon(getIcon(unit));
@@ -868,7 +1071,7 @@ async function refresh() {
                     marker.bindTooltip(displayCallsign, { permanent: true, direction: 'top', offset: [0, -12], className: 'vehicle-label' });
                     vehicleMarkers[unit] = marker;
                 }
-            } else if (vehicleMarkers[unit]) {
+            } else if (map && vehicleMarkers[unit]) {
                 map.removeLayer(vehicleMarkers[unit]);
                 delete vehicleMarkers[unit];
             }
@@ -887,7 +1090,7 @@ async function refresh() {
                 delete vehicleData[unit];
                 delete lastAlarmIds[unit];
                 delete vehicleIcons[unit];
-                if (vehicleMarkers[unit]) {
+                if (map && vehicleMarkers[unit]) {
                     map.removeLayer(vehicleMarkers[unit]);
                     delete vehicleMarkers[unit];
                 }
@@ -898,19 +1101,21 @@ async function refresh() {
                 }
             }
         }
-        for (const inc of incs) {
-            const loc = inc.location || {};
-            if (inc.active && loc.lat && loc.lon) {
-                if (incidentMarkers[inc.id]) {
-                    incidentMarkers[inc.id].setLatLng([loc.lat, loc.lon]);
-                } else {
-                    incidentMarkers[inc.id] = L.marker([loc.lat, loc.lon], {icon: incidentIcon})
-                        .addTo(map)
-                        .bindPopup(`${inc.keyword} - ${loc.name}`);
+        if (map) {
+            for (const inc of incs) {
+                const loc = inc.location || {};
+                if (inc.active && loc.lat && loc.lon) {
+                    if (incidentMarkers[inc.id]) {
+                        incidentMarkers[inc.id].setLatLng([loc.lat, loc.lon]);
+                    } else {
+                        incidentMarkers[inc.id] = L.marker([loc.lat, loc.lon], {icon: incidentIcon})
+                            .addTo(map)
+                            .bindPopup(`${inc.keyword} - ${loc.name}`);
+                    }
+                } else if (incidentMarkers[inc.id]) {
+                    map.removeLayer(incidentMarkers[inc.id]);
+                    delete incidentMarkers[inc.id];
                 }
-            } else if (incidentMarkers[inc.id]) {
-                map.removeLayer(incidentMarkers[inc.id]);
-                delete incidentMarkers[inc.id];
             }
         }
         renderActiveIncidents(incs);

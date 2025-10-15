@@ -7,6 +7,7 @@ from queue import Queue, Empty
 import logging
 import functools
 from copy import deepcopy
+import re
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
@@ -20,7 +21,17 @@ def inject_template_globals():
             host = request.host.split(':')[0]
     except RuntimeError:
         host = ''
-    return {'app_settings': settings, 'backend_host': host}
+    monitor_settings = settings.get('monitor') or {}
+    accent = monitor_settings.get('accent_color') or DEFAULT_SETTINGS['monitor']['accent_color']
+    accent = normalise_hex_color(accent, DEFAULT_SETTINGS['monitor']['accent_color'])
+    accent_rgb = hex_to_rgb_string(accent, DEFAULT_ACCENT_RGB)
+    return {
+        'app_settings': settings,
+        'backend_host': host,
+        'accent_color': accent,
+        'accent_color_rgb': accent_rgb,
+        'monitor_defaults': deepcopy(DEFAULT_SETTINGS['monitor']),
+    }
 
 
 def now_local_iso():
@@ -136,6 +147,10 @@ STATUS_TEXT = {
 }
 
 
+DEFAULT_ACCENT_RGB = '13, 110, 253'
+ALLOWED_AUDIO_MODES = {'gong-and-tts', 'gong-only', 'tts-only', 'mute'}
+
+
 DEFAULT_SETTINGS = {
     'operation_area': {
         'name': 'Lich, Deutschland',
@@ -146,6 +161,12 @@ DEFAULT_SETTINGS = {
     'monitor': {
         'show_weather': True,
         'auto_launch_browser': False,
+        'show_map': True,
+        'show_incidents': True,
+        'clock_with_seconds': False,
+        'accent_color': '#0d6efd',
+        'audio_mode': 'gong-and-tts',
+        'gong_volume': 1.0,
     },
     'network': {
         'router_name': 'TP-Link Reise Router',
@@ -167,6 +188,57 @@ def parse_bool(value, default=False):
         if lowered in {'false', '0', 'no', 'off'}:
             return False
     return default
+
+
+ACCENT_COLOR_RE = re.compile(r'^#?(?P<value>(?:[0-9a-fA-F]{3}){1,2})$')
+
+
+def normalise_hex_color(value, fallback='#0d6efd'):
+    if not isinstance(value, str):
+        return fallback
+    match = ACCENT_COLOR_RE.match(value.strip())
+    if not match:
+        return fallback
+    hex_value = match.group('value')
+    if len(hex_value) == 3:
+        hex_value = ''.join(ch * 2 for ch in hex_value)
+    return f"#{hex_value.lower()}"
+
+
+def hex_to_rgb_string(value, fallback=DEFAULT_ACCENT_RGB):
+    if not isinstance(value, str):
+        return fallback
+    colour = normalise_hex_color(value, None)
+    if not colour:
+        return fallback
+    try:
+        red = int(colour[1:3], 16)
+        green = int(colour[3:5], 16)
+        blue = int(colour[5:7], 16)
+    except (TypeError, ValueError):
+        return fallback
+    return f'{red}, {green}, {blue}'
+
+
+def clamp_float(value, minimum=0.0, maximum=1.0, default=1.0):
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return default
+    if numeric < minimum:
+        return minimum
+    if numeric > maximum:
+        return maximum
+    return numeric
+
+
+def normalise_audio_mode(value):
+    if not value:
+        return DEFAULT_SETTINGS['monitor']['audio_mode']
+    candidate = str(value).strip().lower()
+    if candidate in ALLOWED_AUDIO_MODES:
+        return candidate
+    return DEFAULT_SETTINGS['monitor']['audio_mode']
 
 
 def normalise_router_url(value):
@@ -217,6 +289,37 @@ def load_settings():
                 merged_monitor['auto_launch_browser'] = parse_bool(
                     monitor_settings.get('auto_launch_browser'),
                     merged_monitor.get('auto_launch_browser', False),
+                )
+            if 'show_map' in monitor_settings:
+                merged_monitor['show_map'] = parse_bool(
+                    monitor_settings.get('show_map'),
+                    merged_monitor.get('show_map', True),
+                )
+            if 'show_incidents' in monitor_settings:
+                merged_monitor['show_incidents'] = parse_bool(
+                    monitor_settings.get('show_incidents'),
+                    merged_monitor.get('show_incidents', True),
+                )
+            if 'clock_with_seconds' in monitor_settings:
+                merged_monitor['clock_with_seconds'] = parse_bool(
+                    monitor_settings.get('clock_with_seconds'),
+                    merged_monitor.get('clock_with_seconds', False),
+                )
+            if 'accent_color' in monitor_settings:
+                merged_monitor['accent_color'] = normalise_hex_color(
+                    monitor_settings.get('accent_color'),
+                    merged_monitor.get('accent_color', DEFAULT_SETTINGS['monitor']['accent_color']),
+                )
+            if 'audio_mode' in monitor_settings:
+                merged_monitor['audio_mode'] = normalise_audio_mode(
+                    monitor_settings.get('audio_mode')
+                )
+            if 'gong_volume' in monitor_settings:
+                merged_monitor['gong_volume'] = clamp_float(
+                    monitor_settings.get('gong_volume'),
+                    minimum=0.0,
+                    maximum=1.0,
+                    default=DEFAULT_SETTINGS['monitor']['gong_volume'],
                 )
             settings['monitor'] = merged_monitor
         network_settings = data.get('network') or {}
@@ -1307,7 +1410,16 @@ def api_update_operation_area():
 def api_update_monitor_settings():
     data = request.get_json(silent=True) or {}
     monitor_settings = dict(settings.get('monitor') or {})
-    allowed_keys = {'show_weather', 'auto_launch_browser'}
+    allowed_keys = {
+        'show_weather',
+        'auto_launch_browser',
+        'show_map',
+        'show_incidents',
+        'clock_with_seconds',
+        'accent_color',
+        'audio_mode',
+        'gong_volume',
+    }
     payload_keys = allowed_keys.intersection(data.keys())
     if not payload_keys:
         return jsonify({'ok': False, 'error': 'Keine gültigen Monitor-Einstellungen übermittelt.'}), 400
@@ -1321,9 +1433,43 @@ def api_update_monitor_settings():
             data.get('auto_launch_browser'),
             monitor_settings.get('auto_launch_browser', False),
         )
+    if 'show_map' in payload_keys:
+        monitor_settings['show_map'] = parse_bool(
+            data.get('show_map'),
+            monitor_settings.get('show_map', True),
+        )
+    if 'show_incidents' in payload_keys:
+        monitor_settings['show_incidents'] = parse_bool(
+            data.get('show_incidents'),
+            monitor_settings.get('show_incidents', True),
+        )
+    if 'clock_with_seconds' in payload_keys:
+        monitor_settings['clock_with_seconds'] = parse_bool(
+            data.get('clock_with_seconds'),
+            monitor_settings.get('clock_with_seconds', False),
+        )
+    if 'accent_color' in payload_keys:
+        monitor_settings['accent_color'] = normalise_hex_color(
+            data.get('accent_color'),
+            monitor_settings.get('accent_color', DEFAULT_SETTINGS['monitor']['accent_color']),
+        )
+    if 'audio_mode' in payload_keys:
+        monitor_settings['audio_mode'] = normalise_audio_mode(data.get('audio_mode'))
+    if 'gong_volume' in payload_keys:
+        monitor_settings['gong_volume'] = clamp_float(
+            data.get('gong_volume'),
+            minimum=0.0,
+            maximum=1.0,
+            default=monitor_settings.get('gong_volume', DEFAULT_SETTINGS['monitor']['gong_volume']),
+        )
     settings['monitor'] = monitor_settings
     save_settings()
-    return jsonify({'ok': True, 'monitor': monitor_settings})
+    response = dict(monitor_settings)
+    response['accent_color_rgb'] = hex_to_rgb_string(
+        response.get('accent_color'),
+        DEFAULT_ACCENT_RGB,
+    )
+    return jsonify({'ok': True, 'monitor': response})
 
 
 @app.route('/api/settings/network', methods=['PUT'])
