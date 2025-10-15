@@ -18,7 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / 'data'
 SETTINGS_FILE = DATA_DIR / 'settings.json'
 LOG_FILE = DATA_DIR / 'browser-launch.log'
-DEFAULT_URL = 'http://localhost:5000/monitor?autoplay=1'
+DEFAULT_URL = 'http://localhost:5000/'
 SENTINEL_FILE = Path(os.environ.get('ALARM_MONITOR_BROWSER_SENTINEL', '/tmp/alarmmonitor-browser-launched'))
 
 
