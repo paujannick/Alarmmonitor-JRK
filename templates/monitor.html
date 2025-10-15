@@ -566,7 +566,14 @@ function updateFullscreenUi() {
   if (nav) {
     nav.style.display = isFullscreen ? 'none' : '';
   }
-  fullscreenBtn.textContent = isFullscreen ? 'Vollbild verlassen' : 'Vollbild';
+  if (fullscreenBtn) {
+    if (isFullscreen) {
+      fullscreenBtn.style.display = 'none';
+    } else {
+      fullscreenBtn.style.display = '';
+      fullscreenBtn.textContent = 'Vollbild';
+    }
+  }
 }
 
 document.addEventListener('fullscreenchange', updateFullscreenUi);
