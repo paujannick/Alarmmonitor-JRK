@@ -379,32 +379,70 @@ select.form-select:-webkit-autofill {
   color: rgba(255, 255, 255, 0.88);
 }
 
+
 .table {
-  color: rgba(255, 255, 255, 0.88);
-  background-color: transparent;
+  --table-surface-bg: rgba(18, 18, 18, 0.82);
+  --table-header-bg: rgba(255, 255, 255, 0.06);
+  --table-hover-bg: rgba(var(--accent-color-rgb), 0.14);
+  --table-border-color: rgba(255, 255, 255, 0.08);
+  --bs-table-color: rgba(255, 255, 255, 0.9);
+  --bs-table-bg: var(--table-surface-bg);
+  --bs-table-striped-color: rgba(255, 255, 255, 0.92);
+  --bs-table-striped-bg: rgba(255, 255, 255, 0.06);
+  --bs-table-hover-color: #fff;
+  --bs-table-hover-bg: var(--table-hover-bg);
+  --bs-table-border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  background-color: var(--table-surface-bg);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
 }
 
 .table thead th,
 .table thead td {
-  color: rgba(255, 255, 255, 0.65);
-  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.72);
+  border-color: var(--table-border-color);
+  background: linear-gradient(135deg, var(--table-header-bg), rgba(255, 255, 255, 0.02));
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.table tbody tr {
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.table tbody tr:hover {
+  background-color: var(--table-hover-bg);
+  transform: translateY(-1px);
 }
 
 .table tbody td,
 .table tbody th {
-  border-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+.table.table-sm {
+  border-radius: 0.65rem;
+  box-shadow: none;
+}
+
+.table.table-sm tbody tr:hover {
+  transform: none;
 }
 
 .card-panel .table thead th {
-  border-color: rgba(255, 255, 255, 0.08);
-  text-transform: uppercase;
-  font-size: 0.75rem;
+  background: linear-gradient(135deg, rgba(var(--accent-color-rgb), 0.22), rgba(255, 255, 255, 0.04));
+  color: rgba(255, 255, 255, 0.78);
+  border-color: rgba(255, 255, 255, 0.1);
   letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.6);
 }
 
-.card-panel .table tbody td {
-  border-color: rgba(255, 255, 255, 0.04);
+.card-panel .table tbody td,
+.card-panel .table tbody th {
+  border-color: rgba(255, 255, 255, 0.05);
 }
 
 .card-panel .alert {
@@ -426,6 +464,21 @@ select.form-select:-webkit-autofill {
 .table-responsive {
   border-radius: 1rem;
   overflow: hidden;
+  background: rgba(18, 18, 18, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.35);
+}
+
+.table-responsive > .table {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background-color: transparent;
+}
+
+.table-responsive > .table thead th,
+.table-responsive > .table thead td {
+  background: linear-gradient(135deg, rgba(var(--accent-color-rgb), 0.2), rgba(255, 255, 255, 0.05));
 }
 
 .badge.bg-secondary-subtle {
@@ -1626,3 +1679,19 @@ tr.status-9 .status-color {
 .incident-vehicle-option.disabled:hover {
   border-color: transparent;
 }
+.table-dark {
+  --table-surface-bg: rgba(12, 12, 12, 0.9);
+  --table-header-bg: rgba(var(--accent-color-rgb), 0.22);
+  --bs-table-color: rgba(255, 255, 255, 0.92);
+  --bs-table-bg: var(--table-surface-bg);
+  --bs-table-striped-bg: rgba(255, 255, 255, 0.08);
+  --bs-table-hover-bg: rgba(var(--accent-color-rgb), 0.18);
+  --bs-table-border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.table.table-dark tbody tr:hover {
+  background-color: rgba(var(--accent-color-rgb), 0.24);
+}
+
