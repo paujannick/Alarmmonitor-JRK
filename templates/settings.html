@@ -84,7 +84,12 @@
           <input class="form-check-input" type="checkbox" id="monitor-show-weather" {% if app_settings.monitor.show_weather %}checked{% endif %}>
           <label class="form-check-label" for="monitor-show-weather">Wetter-Kachel auf dem Monitor anzeigen</label>
         </div>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="monitor-auto-launch-browser" {% if app_settings.monitor.auto_launch_browser %}checked{% endif %}>
+          <label class="form-check-label" for="monitor-auto-launch-browser">Browser beim Start automatisch öffnen</label>
+        </div>
         <p class="text-body-secondary small mb-0">Blendt die Wetter-Kachel aus, wenn der verfügbare Platz für andere Kacheln benötigt wird.</p>
+        <p class="text-body-secondary small mb-0">Öffnet nach einem Neustart automatisch den Alarmmonitor im Vollbildmodus und aktiviert den Ton, wenn diese Option aktiv ist.</p>
         <div id="monitor-settings-feedback" class="alert d-none" role="alert"></div>
       </div>
     </section>
@@ -264,29 +269,49 @@ function showFeedback(target, message, type = 'success') {
 }
 
 const monitorToggle = document.getElementById('monitor-show-weather');
+const monitorAutoLaunchToggle = document.getElementById('monitor-auto-launch-browser');
 const monitorFeedback = document.getElementById('monitor-settings-feedback');
 
-if (monitorToggle) {
-  monitorToggle.addEventListener('change', async () => {
-    const enabled = monitorToggle.checked;
-    monitorToggle.disabled = true;
-    try {
-      const response = await fetch('/api/settings/monitor', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ show_weather: enabled }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.ok) {
-        throw new Error((data && data.error) || 'Monitor-Einstellungen konnten nicht gespeichert werden.');
-      }
-      showFeedback(monitorFeedback, enabled ? 'Die Wetter-Kachel ist nun sichtbar.' : 'Die Wetter-Kachel wurde ausgeblendet.');
-    } catch (err) {
-      monitorToggle.checked = !enabled;
-      showFeedback(monitorFeedback, err.message || 'Monitor-Einstellungen konnten nicht gespeichert werden.', 'danger');
-    } finally {
-      monitorToggle.disabled = false;
+async function updateMonitorSetting(element, key, value) {
+  if (!element) return;
+  element.disabled = true;
+  const payload = { [key]: value };
+  try {
+    const response = await fetch('/api/settings/monitor', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) {
+      throw new Error((data && data.error) || 'Monitor-Einstellungen konnten nicht gespeichert werden.');
     }
+    let message = 'Monitor-Einstellungen gespeichert.';
+    if (key === 'show_weather') {
+      message = value ? 'Die Wetter-Kachel ist nun sichtbar.' : 'Die Wetter-Kachel wurde ausgeblendet.';
+    } else if (key === 'auto_launch_browser') {
+      message = value
+        ? 'Der Browser wird beim nächsten Start automatisch geöffnet.'
+        : 'Automatisches Öffnen des Browsers wurde deaktiviert.';
+    }
+    showFeedback(monitorFeedback, message);
+  } catch (err) {
+    element.checked = !value;
+    showFeedback(monitorFeedback, err.message || 'Monitor-Einstellungen konnten nicht gespeichert werden.', 'danger');
+  } finally {
+    element.disabled = false;
+  }
+}
+
+if (monitorToggle) {
+  monitorToggle.addEventListener('change', () => {
+    updateMonitorSetting(monitorToggle, 'show_weather', monitorToggle.checked);
+  });
+}
+
+if (monitorAutoLaunchToggle) {
+  monitorAutoLaunchToggle.addEventListener('change', () => {
+    updateMonitorSetting(monitorAutoLaunchToggle, 'auto_launch_browser', monitorAutoLaunchToggle.checked);
   });
 }
 

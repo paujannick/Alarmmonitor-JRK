@@ -145,6 +145,7 @@ DEFAULT_SETTINGS = {
     },
     'monitor': {
         'show_weather': True,
+        'auto_launch_browser': False,
     },
     'network': {
         'router_name': 'TP-Link Reise Router',
@@ -211,6 +212,11 @@ def load_settings():
                 merged_monitor['show_weather'] = parse_bool(
                     monitor_settings.get('show_weather'),
                     merged_monitor.get('show_weather', True),
+                )
+            if 'auto_launch_browser' in monitor_settings:
+                merged_monitor['auto_launch_browser'] = parse_bool(
+                    monitor_settings.get('auto_launch_browser'),
+                    merged_monitor.get('auto_launch_browser', False),
                 )
             settings['monitor'] = merged_monitor
         network_settings = data.get('network') or {}
@@ -1299,14 +1305,22 @@ def api_update_operation_area():
 
 @app.route('/api/settings/monitor', methods=['PUT'])
 def api_update_monitor_settings():
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     monitor_settings = dict(settings.get('monitor') or {})
-    if 'show_weather' not in data:
+    allowed_keys = {'show_weather', 'auto_launch_browser'}
+    payload_keys = allowed_keys.intersection(data.keys())
+    if not payload_keys:
         return jsonify({'ok': False, 'error': 'Keine gültigen Monitor-Einstellungen übermittelt.'}), 400
-    monitor_settings['show_weather'] = parse_bool(
-        data.get('show_weather'),
-        monitor_settings.get('show_weather', True),
-    )
+    if 'show_weather' in payload_keys:
+        monitor_settings['show_weather'] = parse_bool(
+            data.get('show_weather'),
+            monitor_settings.get('show_weather', True),
+        )
+    if 'auto_launch_browser' in payload_keys:
+        monitor_settings['auto_launch_browser'] = parse_bool(
+            data.get('auto_launch_browser'),
+            monitor_settings.get('auto_launch_browser', False),
+        )
     settings['monitor'] = monitor_settings
     save_settings()
     return jsonify({'ok': True, 'monitor': monitor_settings})
