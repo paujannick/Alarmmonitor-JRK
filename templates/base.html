@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     {% block head_extra %}{% endblock %}
 </head>
-<body>
+<body style="--accent-color: {{ accent_color }}; --accent-color-rgb: {{ accent_color_rgb }};">
 <nav class="navbar navbar-dark bg-dark mb-4">
     <div class="container-fluid d-flex flex-wrap align-items-center gap-3">
         <div class="d-flex flex-wrap align-items-center gap-3">
