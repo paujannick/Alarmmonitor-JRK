@@ -160,7 +160,6 @@ DEFAULT_SETTINGS = {
     },
     'monitor': {
         'show_weather': True,
-        'auto_launch_browser': False,
         'show_map': True,
         'show_incidents': True,
         'clock_with_seconds': False,
@@ -284,11 +283,6 @@ def load_settings():
                 merged_monitor['show_weather'] = parse_bool(
                     monitor_settings.get('show_weather'),
                     merged_monitor.get('show_weather', True),
-                )
-            if 'auto_launch_browser' in monitor_settings:
-                merged_monitor['auto_launch_browser'] = parse_bool(
-                    monitor_settings.get('auto_launch_browser'),
-                    merged_monitor.get('auto_launch_browser', False),
                 )
             if 'show_map' in monitor_settings:
                 merged_monitor['show_map'] = parse_bool(
@@ -1412,7 +1406,6 @@ def api_update_monitor_settings():
     monitor_settings = dict(settings.get('monitor') or {})
     allowed_keys = {
         'show_weather',
-        'auto_launch_browser',
         'show_map',
         'show_incidents',
         'clock_with_seconds',
@@ -1427,11 +1420,6 @@ def api_update_monitor_settings():
         monitor_settings['show_weather'] = parse_bool(
             data.get('show_weather'),
             monitor_settings.get('show_weather', True),
-        )
-    if 'auto_launch_browser' in payload_keys:
-        monitor_settings['auto_launch_browser'] = parse_bool(
-            data.get('auto_launch_browser'),
-            monitor_settings.get('auto_launch_browser', False),
         )
     if 'show_map' in payload_keys:
         monitor_settings['show_map'] = parse_bool(
