@@ -2,6 +2,12 @@
 {% block container_class %}container-fluid px-2 px-sm-3{% endblock %}
 {% block content %}
 <h1 class="mb-3">Fahrzeugstatus</h1>
+<div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+  <button id="status-fullscreen" class="btn btn-outline-light btn-sm">Vollbild</button>
+  <button id="status-play-gong" class="btn btn-outline-warning btn-sm">Gong testen</button>
+  <button id="status-speak-test" class="btn btn-outline-info btn-sm">Sprache testen</button>
+  <span class="small text-white-50" id="status-audio-info">Audio bereit.</span>
+</div>
 <div class="vehicle-grid" id="vehicle-status-board">
 {% for name, info in vehicles.items() %}
   <article class="vehicle-card status-row" data-unit="{{ name }}" tabindex="0">
@@ -26,6 +32,7 @@
       </div>
       <div class="modal-body">
         <p id="statusModalDetails" class="small text-white-50"></p>
+        <div id="statusModalIncident" class="alert alert-secondary py-2 px-3 small d-none"></div>
         <div class="status-pad" id="statusPad"></div>
       </div>
     </div>
@@ -43,8 +50,66 @@ const modal = new bootstrap.Modal(modalEl);
 const modalTitle = document.getElementById('statusModalTitle');
 const modalDetails = document.getElementById('statusModalDetails');
 const statusPad = document.getElementById('statusPad');
+const incidentBox = document.getElementById('statusModalIncident');
+const fullscreenBtn = document.getElementById('status-fullscreen');
+const gongTestBtn = document.getElementById('status-play-gong');
+const speakTestBtn = document.getElementById('status-speak-test');
+const audioInfo = document.getElementById('status-audio-info');
+const alarmAudio = new Audio('{{ gong_sound_url }}');
+alarmAudio.preload = 'auto';
+alarmAudio.setAttribute('playsinline', 'true');
+let incidents = [];
 let currentUnit = null;
 let state = {};
+let audioUnlocked = false;
+
+function unlockAudio() {
+  audioUnlocked = true;
+  audioInfo.textContent = 'Audio entsperrt (Android/iOS/Windows).';
+}
+
+document.addEventListener('pointerdown', unlockAudio, { once: true });
+
+function speakText(text) {
+  const synth = window.speechSynthesis;
+  if (!synth || !window.SpeechSynthesisUtterance) {
+    audioInfo.textContent = 'Sprachausgabe nicht verfügbar.';
+    return;
+  }
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'de-DE';
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  synth.cancel();
+  synth.speak(utterance);
+}
+
+async function playGong() {
+  try {
+    alarmAudio.currentTime = 0;
+    await alarmAudio.play();
+    audioInfo.textContent = 'Gong abgespielt.';
+  } catch (error) {
+    audioInfo.textContent = 'Audio blockiert – einmal tippen und erneut versuchen.';
+  }
+}
+
+function getCurrentIncident(unit) {
+  return incidents.find(inc => inc.active && (inc.vehicles || []).includes(unit)) || null;
+}
+
+function renderIncidentInfo(unit) {
+  const incident = getCurrentIncident(unit);
+  if (!incident) {
+    incidentBox.classList.add('d-none');
+    incidentBox.textContent = '';
+    return;
+  }
+  const loc = (incident.location && incident.location.name) ? incident.location.name : 'Ohne Ort';
+  const patient = incident.patient ? `Patient: ${incident.patient}` : 'Patient: –';
+  incidentBox.textContent = `Einsatz #${incident.id} • ${incident.keyword || 'Ohne Stichwort'} • ${loc} • Priorität ${incident.priority || '–'} • ${patient}`;
+  incidentBox.classList.remove('d-none');
+}
 
 function renderPad(activeStatus) {
   statusPad.innerHTML = '';
@@ -63,6 +128,7 @@ function openUnit(unit) {
   currentUnit = unit;
   modalTitle.textContent = `${unit} – Status ${info.status}`;
   modalDetails.textContent = `${info.callsign || ''} • ${info.location || 'Kein Standort'} • ${statusText[String(info.status)] || ''}`;
+  renderIncidentInfo(unit);
   renderPad(Number(info.status));
   modal.show();
 }
@@ -72,6 +138,12 @@ async function sendStatus(unit, status) {
     const response = await fetch('/api/dispatch', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({unit,status})});
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error('Status konnte nicht gesetzt werden');
+    const label = statusText[String(status)] || status;
+    const speech = `${unit} Status ${status}, ${label}.`;
+    if (audioUnlocked) {
+      playGong();
+      speakText(speech);
+    }
     await refreshStatus();
     openUnit(unit);
   } catch (err) {
@@ -91,11 +163,26 @@ async function refreshStatus() {
     row.querySelector('.vehicle-callsign').textContent = info.callsign || info.name || '';
   });
 }
+async function refreshIncidents() {
+  const response = await fetch('/api/incidents', {cache:'no-store'});
+  incidents = await response.json();
+}
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen?.();
+  } else {
+    document.exitFullscreen?.();
+  }
+}
 rows.forEach(row => {
   row.addEventListener('click', () => openUnit(row.dataset.unit));
   row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') openUnit(row.dataset.unit); });
 });
-refreshStatus();
+fullscreenBtn?.addEventListener('click', toggleFullscreen);
+gongTestBtn?.addEventListener('click', playGong);
+speakTestBtn?.addEventListener('click', () => speakText('Sprachausgabe ist aktiv.'));
+Promise.all([refreshStatus(), refreshIncidents()]);
 new EventSource('/events').onmessage = refreshStatus;
 </script>
 {% endblock %}
