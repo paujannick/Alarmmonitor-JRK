@@ -103,6 +103,18 @@
               <p class="form-text mb-0"><span id="monitor-gong-volume-value">{{ (gong_volume * 100)|round(0)|int }}</span>&nbsp;%</p>
             </div>
           </div>
+
+          <div class="row g-3 align-items-end">
+            <div class="col-md-8">
+              <label class="form-label" for="monitor-gong-file">Eigener Gong-Sound</label>
+              <input type="file" class="form-control" id="monitor-gong-file" accept=".mp3,.wav,.ogg,.m4a,audio/*">
+              <div class="form-text">Lade einen eigenen Gong hoch, der für neue Alarme genutzt wird.</div>
+            </div>
+            <div class="col-md-4 d-grid">
+              <button type="button" class="btn btn-outline-light" id="monitor-gong-upload">Gong hochladen</button>
+            </div>
+          </div>
+
           <p class="text-body-secondary small mb-0">Änderungen werden nach dem Speichern auf dem Monitor wirksam. Ein offenes Dashboard übernimmt die neuen Einstellungen automatisch nach dem nächsten Refresh.</p>
           <div class="d-flex flex-wrap gap-2">
             <button type="submit" class="btn btn-primary">Monitor-Einstellungen speichern</button>
@@ -295,6 +307,8 @@ const monitorAudioMode = document.getElementById('monitor-audio-mode');
 const monitorVolumeInput = document.getElementById('monitor-gong-volume');
 const monitorVolumeLabel = document.getElementById('monitor-gong-volume-value');
 const monitorResetButton = document.getElementById('monitor-reset-defaults');
+const monitorGongFileInput = document.getElementById('monitor-gong-file');
+const monitorGongUploadButton = document.getElementById('monitor-gong-upload');
 
 function hexToRgbString(value) {
   if (typeof value !== 'string') return null;
@@ -446,6 +460,38 @@ if (monitorResetButton && monitorForm) {
       updateVolumeLabel(volumePercent);
     }
     monitorForm.requestSubmit();
+  });
+}
+
+
+if (monitorGongUploadButton) {
+  monitorGongUploadButton.addEventListener('click', async () => {
+    const file = monitorGongFileInput && monitorGongFileInput.files ? monitorGongFileInput.files[0] : null;
+    if (!file) {
+      showFeedback(monitorFeedback, 'Bitte zuerst eine Gong-Datei auswählen.', 'warning');
+      return;
+    }
+    monitorGongUploadButton.disabled = true;
+    const formData = new FormData();
+    formData.append('gong_file', file);
+    try {
+      const response = await fetch('/api/settings/monitor/gong', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) {
+        throw new Error((data && data.error) || 'Gong konnte nicht hochgeladen werden.');
+      }
+      showFeedback(monitorFeedback, 'Gong erfolgreich gespeichert. Monitor lädt den neuen Ton beim nächsten Refresh.', 'success');
+      if (monitorGongFileInput) {
+        monitorGongFileInput.value = '';
+      }
+    } catch (err) {
+      showFeedback(monitorFeedback, err.message || 'Gong konnte nicht hochgeladen werden.', 'danger');
+    } finally {
+      monitorGongUploadButton.disabled = false;
+    }
   });
 }
 

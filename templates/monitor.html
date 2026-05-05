@@ -79,8 +79,8 @@
   </main>
 </div>
 <audio id="alarm" preload="auto" playsinline webkit-playsinline crossorigin="anonymous">
-  <source src="{{ url_for('static', filename='gong.mp3') }}" type="audio/mpeg">
-  <source src="{{ url_for('static', filename='gong.wav') }}" type="audio/wav">
+  <source src="{{ gong_sound_url }}" type="audio/mpeg">
+  <source src="{{ gong_sound_url }}" type="audio/wav">
 </audio>
 {% endblock %}
 {% block scripts %}
@@ -921,6 +921,7 @@ function triggerAlarm(unit, info, alarmId) {
     const speechCallsign = info.tts || displayCallsign;
     const priority = info.priority || '';
     const parts = [`Alarm für ${speechCallsign}`];
+    if (priority) parts.push(priority);
     if (info.note) parts.push(info.note);
     if (info.location) parts.push(info.location);
     const speechText = parts.join('. ');
