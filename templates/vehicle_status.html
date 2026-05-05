@@ -4,7 +4,7 @@
 <h1 class="mb-3">Fahrzeugstatus</h1>
 <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
   <button id="status-fullscreen" class="btn btn-outline-light btn-sm">Vollbild</button>
-  <span class="small text-white-50" id="status-audio-info">Audio bereit.</span>
+  <span class="small text-white-50" id="status-audio-info">Gong und Sprachausgabe deaktiviert.</span>
 </div>
 <div class="vehicle-grid" id="vehicle-status-board">
 {% for name, info in vehicles.items() %}
@@ -51,63 +51,9 @@ const statusPad = document.getElementById('statusPad');
 const incidentBox = document.getElementById('statusModalIncident');
 const fullscreenBtn = document.getElementById('status-fullscreen');
 const audioInfo = document.getElementById('status-audio-info');
-const alarmAudio = new Audio('{{ gong_sound_url }}');
-alarmAudio.preload = 'auto';
-alarmAudio.setAttribute('playsinline', 'true');
 let incidents = [];
 let currentUnit = null;
 let state = {};
-let audioUnlocked = false;
-
-function unlockAudio() {
-  audioUnlocked = true;
-  audioInfo.textContent = 'Audio entsperrt (Android/iOS/Windows).';
-}
-
-document.addEventListener('pointerdown', unlockAudio, { once: true });
-
-const synth = window.speechSynthesis || null;
-let selectedVoice = null;
-
-function pickVoice() {
-  if (!synth) return null;
-  const voices = synth.getVoices();
-  if (!voices.length) return null;
-  const germanVoice = voices.find(v => (v.lang || '').toLowerCase().startsWith('de'));
-  return germanVoice || voices[0] || null;
-}
-
-function speakText(text) {
-  if (!synth || !window.SpeechSynthesisUtterance) {
-    audioInfo.textContent = 'Sprachausgabe nicht verfügbar.';
-    return;
-  }
-  selectedVoice = selectedVoice || pickVoice();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = selectedVoice?.lang || 'de-DE';
-  utterance.voice = selectedVoice || null;
-  utterance.rate = 1;
-  utterance.pitch = 1;
-  synth.cancel();
-  synth.speak(utterance);
-}
-
-if (synth) {
-  synth.onvoiceschanged = () => {
-    selectedVoice = pickVoice();
-  };
-  selectedVoice = pickVoice();
-}
-
-async function playGong() {
-  try {
-    alarmAudio.currentTime = 0;
-    await alarmAudio.play();
-    audioInfo.textContent = 'Gong abgespielt.';
-  } catch (error) {
-    audioInfo.textContent = 'Audio blockiert – einmal tippen und erneut versuchen.';
-  }
-}
 
 function getCurrentIncident(unit) {
   return incidents.find(inc => inc.active && (inc.vehicles || []).includes(unit)) || null;
@@ -153,15 +99,7 @@ async function sendStatus(unit, status) {
     const response = await fetch('/api/dispatch', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({unit,status})});
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error('Status konnte nicht gesetzt werden');
-    const label = statusText[String(status)] || status;
-    const speech = `${unit} Status ${status}, ${label}.`;
-    const hasActiveAlarm = Boolean(getCurrentIncident(unit));
-    if (audioUnlocked && hasActiveAlarm) {
-      playGong();
-      speakText(speech);
-    } else if (!hasActiveAlarm) {
-      audioInfo.textContent = 'Keine Alarmierung aktiv – kein Gong/keine Sprachausgabe.';
-    }
+    audioInfo.textContent = 'Gong und Sprachausgabe deaktiviert.';
     await refreshStatus();
     openUnit(unit);
   } catch (err) {
