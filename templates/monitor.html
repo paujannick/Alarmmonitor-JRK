@@ -155,7 +155,7 @@ const AUDIO_PREFS = {
 };
 const audioMode = String(monitorSettings.audio_mode || 'gong-and-tts').toLowerCase();
 const audioPrefs = AUDIO_PREFS[audioMode] || AUDIO_PREFS['gong-and-tts'];
-const requiresAudioUnlock = Boolean(audioPrefs.gong || audioPrefs.tts);
+const requiresAudioUnlock = Boolean(audioPrefs.gong);
 const configuredVolume = Number(monitorSettings.gong_volume);
 const gongVolume = Number.isFinite(configuredVolume)
   ? Math.min(1, Math.max(0, configuredVolume))
@@ -804,10 +804,6 @@ if ('speechSynthesis' in window && window.speechSynthesis) {
 function speak(text) {
     const t = (text || '').trim();
     if (!t || !audioPrefs.tts) return Promise.resolve();
-    if (!audioUnlocked) {
-        updateAudioStatus();
-        return Promise.resolve();
-    }
     if ('speechSynthesis' in window && window.speechSynthesis) {
         return new Promise(resolve => {
             const utterance = new SpeechSynthesisUtterance(t);
