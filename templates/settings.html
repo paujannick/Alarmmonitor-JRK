@@ -41,40 +41,7 @@
     </section>
   </div>
 
-  <div class="col-12 col-xl-6">
-    <section class="card card-panel h-100">
-      <div class="card-header d-flex flex-wrap justify-content-between align-items-start gap-3">
-        <div>
-          <h2 class="h5 mb-1">Netzwerkverwaltung</h2>
-          <p class="text-body-secondary small mb-0">Das WLAN des Alarmmonitors wird über einen TP-Link Reise Router bereitgestellt.</p>
-        </div>
-        {% if network.admin_url %}
-        <a id="network-open-button" class="btn btn-outline-warning" href="{{ network.admin_url }}" target="_blank" rel="noopener">Router öffnen</a>
-        {% endif %}
-      </div>
-      <div class="card-body">
-        <form id="network-settings-form" class="row g-3" autocomplete="off">
-          <div class="col-sm-6">
-            <label class="form-label" for="network-router-name">Gerätename</label>
-            <input type="text" id="network-router-name" name="router_name" class="form-control" value="{{ network.router_name or '' }}" placeholder="TP-Link Reise Router">
-          </div>
-          <div class="col-sm-6">
-            <label class="form-label" for="network-admin-url">Administrations-URL</label>
-            <input type="url" id="network-admin-url" name="admin_url" class="form-control" value="{{ network.admin_url or '' }}" placeholder="http://tplinkwifi.net">
-          </div>
-          <div class="col-12">
-            <label class="form-label" for="network-notes">Hinweis (z.&nbsp;B. Zugangsdaten)</label>
-            <textarea id="network-notes" name="notes" class="form-control" rows="2" placeholder="Passwort steht auf der Unterseite.">{{ network.notes or '' }}</textarea>
-          </div>
-          <div class="col-12 d-flex flex-wrap justify-content-between align-items-center gap-3">
-            <p class="text-body-secondary small mb-0">Die WLAN-Konfiguration erfolgt direkt über den Router. Verbinde dich mit dem TP-Link WLAN, öffne die Administrations-URL und folge dem Einrichtungsassistenten.</p>
-            <button type="submit" class="btn btn-primary">Netzwerk speichern</button>
-          </div>
-        </form>
-        <div id="network-settings-feedback" class="alert d-none mt-3" role="alert"></div>
-      </div>
-    </section>
-  </div>
+  
 
   <div class="col-12 col-xl-6">
     <section class="card card-panel h-100">

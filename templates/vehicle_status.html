@@ -1,39 +1,35 @@
 {% extends 'base.html' %}
-{% block container_class %}container-fluid{% endblock %}
+{% block container_class %}container-fluid px-2 px-sm-3{% endblock %}
 {% block content %}
-<h1 class="mb-4">Fahrzeugstatus</h1>
-<div class="table-responsive">
-  <table class="table table-dark table-striped align-middle" id="vehicle-status-table">
-    <thead>
-      <tr>
-        <th scope="col">Fahrzeug</th>
-        <th scope="col">Status</th>
-        <th scope="col">Schnellwahl</th>
-      </tr>
-    </thead>
-    <tbody id="vehicle-status-board">
-    {% for name, info in vehicles.items() %}
-      <tr class="status-row" data-unit="{{ name }}">
-        <th scope="row">
-          <div class="fw-semibold">{{ name }}</div>
-          <div class="text-white-50 small vehicle-callsign">{{ info.callsign or info.name }}</div>
-        </th>
-        <td class="status-display">
-          <span class="badge bg-primary status-label">Status {{ info.status }} – {{ status_text[info.status] }}</span>
-        </td>
-        <td class="status-buttons">
-          <div class="btn-group btn-group-sm" role="group" aria-label="Status Schnellwahl">
-            {% for code, text in status_text.items() %}
-            <button type="button" class="btn btn-sm status-btn {% if code == info.status %}btn-primary{% else %}btn-outline-secondary{% endif %}" data-status="{{ code }}" title="{{ code }} - {{ text }}">
-              {{ code }}
-            </button>
-            {% endfor %}
-          </div>
-        </td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+<h1 class="mb-3">Fahrzeugstatus</h1>
+<div class="vehicle-grid" id="vehicle-status-board">
+{% for name, info in vehicles.items() %}
+  <article class="vehicle-card status-row" data-unit="{{ name }}" tabindex="0">
+    <div class="d-flex justify-content-between align-items-start gap-2">
+      <div>
+        <div class="fw-semibold fs-5">{{ name }}</div>
+        <div class="text-white-50 small vehicle-callsign">{{ info.callsign or info.name }}</div>
+      </div>
+      <span class="badge bg-primary status-label">{{ info.status }} – {{ status_text[info.status] }}</span>
+    </div>
+    <div class="small text-white-50 mt-2">Tippen für Details &amp; Status 1-8</div>
+  </article>
+{% endfor %}
+</div>
+
+<div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+    <div class="modal-content bg-dark text-light">
+      <div class="modal-header">
+        <h5 class="modal-title" id="statusModalTitle">Fahrzeug</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Schließen"></button>
+      </div>
+      <div class="modal-body">
+        <p id="statusModalDetails" class="small text-white-50"></p>
+        <div class="status-pad" id="statusPad"></div>
+      </div>
+    </div>
+  </div>
 </div>
 <div class="alert alert-danger d-none mt-3" role="alert" id="status-error"></div>
 {% endblock %}
@@ -41,138 +37,65 @@
 <script>
 const statusText = {{ status_text|tojson }};
 const statusError = document.getElementById('status-error');
+const rows = document.querySelectorAll('.status-row');
+const modalEl = document.getElementById('statusModal');
+const modal = new bootstrap.Modal(modalEl);
+const modalTitle = document.getElementById('statusModalTitle');
+const modalDetails = document.getElementById('statusModalDetails');
+const statusPad = document.getElementById('statusPad');
+let currentUnit = null;
+let state = {};
 
-function getStatusLabel(status) {
-  return `Status ${status} – ${statusText[String(status)] || ''}`;
+function renderPad(activeStatus) {
+  statusPad.innerHTML = '';
+  for (let code = 1; code <= 8; code++) {
+    const b = document.createElement('button');
+    b.className = `btn ${code === activeStatus ? 'btn-primary' : 'btn-outline-light'} btn-lg`;
+    b.textContent = `${code}`;
+    b.onclick = () => sendStatus(currentUnit, code);
+    statusPad.appendChild(b);
+  }
 }
 
-function updateRow(row, info) {
-  if (!row || !info) return;
-  const status = Number(info.status);
-  const badge = row.querySelector('.status-label');
-  if (badge) {
-    badge.textContent = getStatusLabel(status);
-  }
-  const callsign = row.querySelector('.vehicle-callsign');
-  if (callsign) {
-    callsign.textContent = info.callsign || info.name || '';
-  }
-  row.querySelectorAll('.status-btn').forEach(btn => {
-    const btnStatus = Number(btn.dataset.status);
-    const isActive = btnStatus === status;
-    btn.classList.toggle('btn-primary', isActive);
-    btn.classList.toggle('btn-outline-secondary', !isActive);
-    btn.disabled = false;
-  });
+function openUnit(unit) {
+  const info = state[unit];
+  if (!info) return;
+  currentUnit = unit;
+  modalTitle.textContent = `${unit} – Status ${info.status}`;
+  modalDetails.textContent = `${info.callsign || ''} • ${info.location || 'Kein Standort'} • ${statusText[String(info.status)] || ''}`;
+  renderPad(Number(info.status));
+  modal.show();
 }
 
-async function sendStatus(unit, status, row) {
+async function sendStatus(unit, status) {
   try {
-    statusError.classList.add('d-none');
-    const buttons = row ? Array.from(row.querySelectorAll('.status-btn')) : [];
-    buttons.forEach(btn => (btn.disabled = true));
-    const response = await fetch('/api/dispatch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ unit, status })
-    });
+    const response = await fetch('/api/dispatch', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({unit,status})});
     const data = await response.json();
-    if (!response.ok || !data.ok) {
-      throw new Error('Status konnte nicht gesetzt werden');
-    }
+    if (!response.ok || !data.ok) throw new Error('Status konnte nicht gesetzt werden');
     await refreshStatus();
+    openUnit(unit);
   } catch (err) {
     statusError.textContent = err.message || 'Status konnte nicht gesetzt werden';
     statusError.classList.remove('d-none');
-    if (row) {
-      row.querySelectorAll('.status-btn').forEach(btn => (btn.disabled = false));
-    }
   }
 }
 
 async function refreshStatus() {
-  try {
-    const response = await fetch('/api/status', {
-      cache: 'no-store',
-      headers: {
-        'Cache-Control': 'no-store'
-      }
-    });
-    if (!response.ok) throw new Error('Konnte Fahrzeugdaten nicht laden');
-    const data = await response.json();
-    document.querySelectorAll('.status-row').forEach(row => {
-      const unit = row.dataset.unit;
-      if (data[unit]) {
-        updateRow(row, data[unit]);
-      }
-    });
-    statusError.classList.add('d-none');
-    statusError.textContent = '';
-  } catch (err) {
-    statusError.textContent = err.message || 'Konnte Fahrzeugdaten nicht laden';
-    statusError.classList.remove('d-none');
-  }
-}
-
-function setupHandlers() {
-  document.querySelectorAll('.status-row').forEach(row => {
-    row.addEventListener('click', event => {
-      const button = event.target.closest('.status-btn');
-      if (!button || button.disabled) return;
-      const unit = row.dataset.unit;
-      const status = Number(button.dataset.status);
-      if (!unit || Number.isNaN(status)) return;
-      row.querySelectorAll('.status-btn').forEach(btn => (btn.disabled = true));
-      sendStatus(unit, status, row);
-    });
+  const response = await fetch('/api/status', {cache:'no-store'});
+  state = await response.json();
+  rows.forEach(row => {
+    const unit = row.dataset.unit;
+    const info = state[unit];
+    if (!info) return;
+    row.querySelector('.status-label').textContent = `${info.status} – ${statusText[String(info.status)] || ''}`;
+    row.querySelector('.vehicle-callsign').textContent = info.callsign || info.name || '';
   });
 }
-
-setupHandlers();
-refreshStatus();
-
-let eventSource = null;
-let reconnectTimer = null;
-
-function scheduleReconnect() {
-  if (reconnectTimer) return;
-  reconnectTimer = setTimeout(() => {
-    reconnectTimer = null;
-    connectEventStream();
-  }, 5000);
-}
-
-function connectEventStream() {
-  if (eventSource) {
-    eventSource.close();
-  }
-  eventSource = new EventSource('/events');
-  eventSource.onopen = () => {
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-    }
-    refreshStatus();
-  };
-  eventSource.onmessage = () => {
-    refreshStatus();
-  };
-  eventSource.onerror = () => {
-    if (eventSource) {
-      eventSource.close();
-      eventSource = null;
-    }
-    scheduleReconnect();
-  };
-}
-
-window.addEventListener('beforeunload', () => {
-  if (eventSource) {
-    eventSource.close();
-  }
+rows.forEach(row => {
+  row.addEventListener('click', () => openUnit(row.dataset.unit));
+  row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') openUnit(row.dataset.unit); });
 });
-
-connectEventStream();
-setInterval(refreshStatus, 30000);
+refreshStatus();
+new EventSource('/events').onmessage = refreshStatus;
 </script>
 {% endblock %}
