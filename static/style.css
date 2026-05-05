@@ -1695,3 +1695,34 @@ tr.status-9 .status-color {
   background-color: rgba(var(--accent-color-rgb), 0.24);
 }
 
+
+/* 5-inch touch optimized vehicle status */
+.vehicle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: .5rem;
+}
+.vehicle-card {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: .75rem;
+  padding: .75rem;
+  min-height: 98px;
+}
+.status-pad {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: .5rem;
+}
+
+/* Monitor should always fit screen */
+.monitor-page {
+  min-height: 100dvh;
+  height: 100dvh;
+}
+.monitor-content {
+  min-height: 0;
+}
+.monitor-table-body {
+  overflow: auto;
+}

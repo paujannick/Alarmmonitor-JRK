@@ -17,6 +17,8 @@ Komplettlösung für einen webbasierten Alarmmonitor und ein Leitstellen-Interfa
 - Kartengestützte Einsatzortwahl in der Leitstelle mit Zoom und Reverse-Geocoding
 - Installationsskript für virtuelle Umgebung und Startskript
 
+- Pi-WLAN-Setup-Modus: Erstellt beim Start automatisch ein lokales WLAN (Hotspot), solange kein externes WLAN verbunden ist
+
 ### Alarmgong hinzufügen
 
 Die Audiodatei ist aus dem Repository ausgeschlossen. Lege eine passende
@@ -65,3 +67,13 @@ Anschließend erreichbar unter:
 - Leitstelle: http://localhost:5000/dispatch
 - Fahrzeugverwaltung: http://localhost:5000/vehicles
 - Einsatzdokumentation: http://localhost:5000/incidents
+
+
+## WLAN-Setup ohne Router
+Der Raspberry Pi kann beim Start automatisch ein eigenes WLAN für die Erstkonfiguration bereitstellen (per `nmcli`/NetworkManager).
+
+- Standard-SSID: `Alarmmonitor-Setup`
+- Standard-Passwort: `alarmmonitor123`
+- Skript: `scripts/pi_wifi_bootstrap.sh`
+
+Sobald der Pi mit einem externen WLAN verbunden ist, wird der Setup-Hotspot wieder deaktiviert.
