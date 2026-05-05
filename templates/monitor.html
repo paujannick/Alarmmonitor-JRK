@@ -921,7 +921,6 @@ function triggerAlarm(unit, info, alarmId) {
     const speechCallsign = info.tts || displayCallsign;
     const priority = info.priority || '';
     const parts = [`Alarm für ${speechCallsign}`];
-    if (priority) parts.push(`Priorität ${priority}`);
     if (info.note) parts.push(info.note);
     if (info.location) parts.push(info.location);
     const speechText = parts.join('. ');
