@@ -4,8 +4,6 @@
 <h1 class="mb-3">Fahrzeugstatus</h1>
 <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
   <button id="status-fullscreen" class="btn btn-outline-light btn-sm">Vollbild</button>
-  <button id="status-play-gong" class="btn btn-outline-warning btn-sm">Gong testen</button>
-  <button id="status-speak-test" class="btn btn-outline-info btn-sm">Sprache testen</button>
   <span class="small text-white-50" id="status-audio-info">Audio bereit.</span>
 </div>
 <div class="vehicle-grid" id="vehicle-status-board">
@@ -52,8 +50,6 @@ const modalDetails = document.getElementById('statusModalDetails');
 const statusPad = document.getElementById('statusPad');
 const incidentBox = document.getElementById('statusModalIncident');
 const fullscreenBtn = document.getElementById('status-fullscreen');
-const gongTestBtn = document.getElementById('status-play-gong');
-const speakTestBtn = document.getElementById('status-speak-test');
 const audioInfo = document.getElementById('status-audio-info');
 const alarmAudio = new Audio('{{ gong_sound_url }}');
 alarmAudio.preload = 'auto';
@@ -70,18 +66,37 @@ function unlockAudio() {
 
 document.addEventListener('pointerdown', unlockAudio, { once: true });
 
+const synth = window.speechSynthesis || null;
+let selectedVoice = null;
+
+function pickVoice() {
+  if (!synth) return null;
+  const voices = synth.getVoices();
+  if (!voices.length) return null;
+  const germanVoice = voices.find(v => (v.lang || '').toLowerCase().startsWith('de'));
+  return germanVoice || voices[0] || null;
+}
+
 function speakText(text) {
-  const synth = window.speechSynthesis;
   if (!synth || !window.SpeechSynthesisUtterance) {
     audioInfo.textContent = 'Sprachausgabe nicht verfügbar.';
     return;
   }
+  selectedVoice = selectedVoice || pickVoice();
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'de-DE';
+  utterance.lang = selectedVoice?.lang || 'de-DE';
+  utterance.voice = selectedVoice || null;
   utterance.rate = 1;
   utterance.pitch = 1;
   synth.cancel();
   synth.speak(utterance);
+}
+
+if (synth) {
+  synth.onvoiceschanged = () => {
+    selectedVoice = pickVoice();
+  };
+  selectedVoice = pickVoice();
 }
 
 async function playGong() {
@@ -140,9 +155,12 @@ async function sendStatus(unit, status) {
     if (!response.ok || !data.ok) throw new Error('Status konnte nicht gesetzt werden');
     const label = statusText[String(status)] || status;
     const speech = `${unit} Status ${status}, ${label}.`;
-    if (audioUnlocked) {
+    const hasActiveAlarm = Boolean(getCurrentIncident(unit));
+    if (audioUnlocked && hasActiveAlarm) {
       playGong();
       speakText(speech);
+    } else if (!hasActiveAlarm) {
+      audioInfo.textContent = 'Keine Alarmierung aktiv – kein Gong/keine Sprachausgabe.';
     }
     await refreshStatus();
     openUnit(unit);
@@ -180,8 +198,6 @@ rows.forEach(row => {
   row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') openUnit(row.dataset.unit); });
 });
 fullscreenBtn?.addEventListener('click', toggleFullscreen);
-gongTestBtn?.addEventListener('click', playGong);
-speakTestBtn?.addEventListener('click', () => speakText('Sprachausgabe ist aktiv.'));
 Promise.all([refreshStatus(), refreshIncidents()]);
 new EventSource('/events').onmessage = refreshStatus;
 </script>
