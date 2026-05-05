@@ -78,7 +78,7 @@
     {% endif %}
   </main>
 </div>
-<audio id="alarm" preload="auto">
+<audio id="alarm" preload="auto" playsinline webkit-playsinline crossorigin="anonymous">
   <source src="{{ url_for('static', filename='gong.mp3') }}" type="audio/mpeg">
   <source src="{{ url_for('static', filename='gong.wav') }}" type="audio/wav">
 </audio>
@@ -165,6 +165,7 @@ if (alarmSound) {
 }
 const showClockSeconds = {{ 'true' if clock_with_seconds else 'false' }};
 let audioUnlocked = !requiresAudioUnlock;
+let selectedTtsVoice = null;
 let monitorSettingsCurrent = Object.assign({}, monitorSettings);
 const ttsEl = new Audio();
 ttsEl.volume = gongVolume;
@@ -704,8 +705,9 @@ function unlockAudio() {
 
 if (requiresAudioUnlock) {
     const gestureUnlock = () => unlockAudio();
-    document.addEventListener('pointerdown', gestureUnlock, {once: true});
-    document.addEventListener('keydown', gestureUnlock, {once: true});
+    ['pointerdown','touchstart','click','keydown'].forEach(evt => {
+        document.addEventListener(evt, gestureUnlock, { once: true, passive: true });
+    });
 }
 if (audioStatusEl) {
     audioStatusEl.addEventListener('click', unlockAudio);
@@ -785,6 +787,20 @@ function updateDateTime() {
 }
 setInterval(updateDateTime, 1000);
 updateDateTime();
+function chooseTtsVoice() {
+    if (!('speechSynthesis' in window) || !window.speechSynthesis) return null;
+    const voices = window.speechSynthesis.getVoices() || [];
+    if (!voices.length) return null;
+    return voices.find(v => /^de(-|_|$)/i.test(v.lang)) || voices.find(v => /^en(-|_|$)/i.test(v.lang)) || voices[0] || null;
+}
+
+if ('speechSynthesis' in window && window.speechSynthesis) {
+    window.speechSynthesis.addEventListener?.('voiceschanged', () => {
+        selectedTtsVoice = chooseTtsVoice();
+    });
+    selectedTtsVoice = chooseTtsVoice();
+}
+
 function speak(text) {
     const t = (text || '').trim();
     if (!t || !audioPrefs.tts) return Promise.resolve();
@@ -795,19 +811,21 @@ function speak(text) {
     if ('speechSynthesis' in window && window.speechSynthesis) {
         return new Promise(resolve => {
             const utterance = new SpeechSynthesisUtterance(t);
-            utterance.lang = 'de-DE';
+            selectedTtsVoice = selectedTtsVoice || chooseTtsVoice();
+            if (selectedTtsVoice) {
+                utterance.voice = selectedTtsVoice;
+                utterance.lang = selectedTtsVoice.lang || 'de-DE';
+            } else {
+                utterance.lang = 'de-DE';
+            }
             utterance.onend = resolve;
             utterance.onerror = resolve;
             window.speechSynthesis.speak(utterance);
         });
     }
-    return new Promise(resolve => {
-        const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=de&q=${encodeURIComponent(t)}`;
-        ttsEl.src = url;
-        ttsEl.onended = resolve;
-        ttsEl.play().catch(() => resolve());
-    });
+    return Promise.resolve();
 }
+
 
 function rememberAnnouncementId(id) {
     if (!id) return;
