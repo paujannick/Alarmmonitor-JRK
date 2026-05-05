@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, Response, send_file
+from flask import Flask, render_template, request, jsonify, Response, send_file, url_for
 import json
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -8,6 +8,7 @@ import logging
 import functools
 from copy import deepcopy
 import re
+import secrets
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
@@ -31,6 +32,7 @@ def inject_template_globals():
         'accent_color': accent,
         'accent_color_rgb': accent_rgb,
         'monitor_defaults': deepcopy(DEFAULT_SETTINGS['monitor']),
+        'gong_sound_url': resolve_gong_sound_url(),
     }
 
 
@@ -149,6 +151,8 @@ STATUS_TEXT = {
 
 DEFAULT_ACCENT_RGB = '13, 110, 253'
 ALLOWED_AUDIO_MODES = {'gong-and-tts', 'gong-only', 'tts-only', 'mute'}
+ALLOWED_GONG_EXTENSIONS = {'.mp3', '.wav', '.ogg', '.m4a'}
+CUSTOM_GONG_DIR = Path('static/uploads')
 
 
 DEFAULT_SETTINGS = {
@@ -166,6 +170,7 @@ DEFAULT_SETTINGS = {
         'accent_color': '#0d6efd',
         'audio_mode': 'gong-and-tts',
         'gong_volume': 1.0,
+        'gong_sound': '',
     },
     'network': {
         'router_name': 'TP-Link Reise Router',
@@ -239,6 +244,20 @@ def normalise_audio_mode(value):
         return candidate
     return DEFAULT_SETTINGS['monitor']['audio_mode']
 
+
+
+
+def resolve_gong_sound_url():
+    monitor_settings = settings.get('monitor') or {}
+    candidate = monitor_settings.get('gong_sound')
+    if isinstance(candidate, str) and candidate.strip():
+        relative = candidate.strip().lstrip('/')
+        if relative.startswith('uploads/') and (Path('static') / relative).exists():
+            return url_for('static', filename=relative)
+    fallback_mp3 = Path('static/gong.mp3')
+    if fallback_mp3.exists():
+        return url_for('static', filename='gong.mp3')
+    return url_for('static', filename='gong.wav')
 
 def normalise_router_url(value):
     if not value:
@@ -315,6 +334,9 @@ def load_settings():
                     maximum=1.0,
                     default=DEFAULT_SETTINGS['monitor']['gong_volume'],
                 )
+            if 'gong_sound' in monitor_settings:
+                gong_sound = monitor_settings.get('gong_sound')
+                merged_monitor['gong_sound'] = gong_sound.strip() if isinstance(gong_sound, str) else ''
             settings['monitor'] = merged_monitor
         network_settings = data.get('network') or {}
         if isinstance(network_settings, dict):
@@ -1412,6 +1434,7 @@ def api_update_monitor_settings():
         'accent_color',
         'audio_mode',
         'gong_volume',
+        'gong_sound',
     }
     payload_keys = allowed_keys.intersection(data.keys())
     if not payload_keys:
@@ -1459,6 +1482,41 @@ def api_update_monitor_settings():
     )
     return jsonify({'ok': True, 'monitor': response})
 
+
+
+
+@app.route('/api/settings/monitor/gong', methods=['POST'])
+def api_upload_monitor_gong():
+    upload = request.files.get('gong_file')
+    if not upload or not upload.filename:
+        return jsonify({'ok': False, 'error': 'Bitte eine Gong-Datei auswählen.'}), 400
+    suffix = Path(upload.filename).suffix.lower()
+    if suffix not in ALLOWED_GONG_EXTENSIONS:
+        allowed = ', '.join(sorted(ALLOWED_GONG_EXTENSIONS))
+        return jsonify({'ok': False, 'error': f'Ungültiges Audioformat. Erlaubt: {allowed}'}), 400
+    CUSTOM_GONG_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"gong-{secrets.token_hex(6)}{suffix}"
+    target = CUSTOM_GONG_DIR / filename
+    try:
+        upload.save(target)
+    except OSError:
+        return jsonify({'ok': False, 'error': 'Gong-Datei konnte nicht gespeichert werden.'}), 500
+
+    monitor_settings = dict(settings.get('monitor') or {})
+    previous = monitor_settings.get('gong_sound')
+    monitor_settings['gong_sound'] = f'uploads/{filename}'
+    settings['monitor'] = monitor_settings
+    save_settings()
+
+    if isinstance(previous, str) and previous.startswith('uploads/'):
+        old_path = Path('static') / previous
+        if old_path.exists():
+            try:
+                old_path.unlink()
+            except OSError:
+                pass
+
+    return jsonify({'ok': True, 'gong_sound_url': resolve_gong_sound_url(), 'gong_sound': monitor_settings['gong_sound']})
 
 @app.route('/api/settings/network', methods=['PUT'])
 def api_update_network_settings():
