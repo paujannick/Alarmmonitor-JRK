@@ -305,7 +305,7 @@ def trigger_pager(
     gpio: int = 24,
     spi_bus: int = 0,
     spi_device: int = 0,
-    power: int = 0xC0,
+    power: int = 0x60,
     repeats: int = 30,
     invert: bool = True,
 ) -> None:
@@ -335,8 +335,8 @@ def main() -> int:
     parser.add_argument(
         "--power",
         type=lambda value: int(value, 0),
-        default=0xC0,
-        help="CC1101 PATABLE-Wert; Standard 0xC0 (ca. +10 dBm bei 433 MHz)",
+        default=0x60,
+        help="CC1101 PATABLE-Wert; Standard 0x60 (erfolgreich getestete Einstellung)",
     )
     parser.set_defaults(invert=True)
     polarity = parser.add_mutually_exclusive_group()
