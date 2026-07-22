@@ -33,7 +33,7 @@ class PagerConfig:
     gpio: int = 24
     spi_bus: int = 0
     spi_device: int = 0
-    power: int = 0xC0
+    power: int = 0x60
     repeats: int = 30
     inverted: bool = True
     timeout_seconds: float = 5.0
@@ -156,6 +156,16 @@ class PagerService:
             sys.executable,
             str(script),
             str(pager),
+            "--gpio",
+            str(config.gpio),
+            "--spi-bus",
+            str(config.spi_bus),
+            "--spi-device",
+            str(config.spi_device),
+            "--power",
+            f"0x{config.power:02X}",
+            "--repeats",
+            str(config.repeats),
             "--yes",
         ]
         subprocess.run(cmd, check=True, timeout=config.timeout_seconds, capture_output=True, text=True)

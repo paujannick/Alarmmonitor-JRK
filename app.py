@@ -189,7 +189,7 @@ DEFAULT_SETTINGS = {
         'gpio': 24,
         'spi_bus': 0,
         'spi_device': 0,
-        'power': 0xC0,
+        'power': 0x60,
         'repeats': 30,
         'inverted': True,
     },
