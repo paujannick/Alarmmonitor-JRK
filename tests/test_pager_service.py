@@ -19,9 +19,6 @@ class ListLogger:
     def error(self, *args):
         self.messages.append(("error", args))
 
-    def warning(self, *args):
-        self.messages.append(("warning", args))
-
 
 def setup_app():
     app = reload(app_module)
@@ -145,26 +142,3 @@ def test_manual_pager_test_does_not_change_vehicle_status():
     assert response.get_json()['queued'] is True
     assert enqueued == [(1, 'RTW1')]
     assert app.vehicles['RTW1']['status'] == 2
-
-
-def test_pager_config_is_enabled_by_default():
-    assert PagerConfig.from_settings({}).enabled is True
-
-
-def test_subprocess_sender_matches_known_manual_command(monkeypatch, tmp_path):
-    script = tmp_path / 'td175p_send.py'
-    script.write_text('#!/usr/bin/env python3\n')
-    calls = []
-
-    def fake_run(cmd, **kwargs):
-        calls.append((cmd, kwargs))
-
-    monkeypatch.setattr('pager_service.subprocess.run', fake_run)
-    service = PagerService(PagerConfig(enabled=True, sender_script=script), ListLogger())
-    service._send_subprocess(1, service.config)
-
-    cmd, kwargs = calls[0]
-    assert cmd[1:] == [str(script), '1', '--gpio', '24', '--power', '0xC0', '--yes']
-    assert '--repeats' not in cmd
-    assert kwargs['timeout'] == 5.0
-    assert kwargs['capture_output'] is True

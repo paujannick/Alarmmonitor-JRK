@@ -103,77 +103,8 @@ class PagerService:
         atexit.register(self.stop)
         if not self.config.enabled:
             self.logger.info("Pagerfunktion ist deaktiviert; Pageraufträge werden nur protokolliert.")
-        else:
-            script = self._resolve_sender_script(self.config.sender_script)
-            if not script.exists():
-                self.logger.warning("Pager-Sender %s nicht gefunden; die Leitstellensoftware startet trotzdem.", script)
-
-    def stop(self, timeout: float = 2.0) -> None:
-        self._stop.set()
-        self._queue.put(None)
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=timeout)
-
-    def enqueue(self, pager: int | None, unit: str | None = None) -> bool:
-        if pager is None:
-            return False
-        pager_payload(pager)
-        self._queue.put((pager, unit))
-        if unit:
-            self.logger.info("Pager %s für %s eingeplant", pager, unit)
-        else:
-            self.logger.info("Pager %s eingeplant", pager)
-        return True
-
-    def wait_until_idle(self, timeout: float = 5.0) -> bool:
-        finished = threading.Event()
-        self._queue.put((0, "__barrier__"))
-        deadline = threading.Timer(timeout, finished.set)
-        deadline.start()
-        while not finished.is_set():
-            if self._queue.unfinished_tasks == 0:
-                deadline.cancel()
-                return True
-            finished.wait(0.01)
-        return False
-
-    def _run(self) -> None:
-        while not self._stop.is_set():
-            try:
-                item = self._queue.get(timeout=0.2)
-            except Empty:
-                continue
-            try:
-                if item is None:
-                    return
-                pager, unit = item
-                if unit == "__barrier__":
-                    continue
-                if not self.config.enabled:
-                    self.logger.info("Pager %s nicht gesendet, weil die Pagerfunktion deaktiviert ist", pager)
-                    continue
-                self.logger.info("Pager %s wird gesendet", pager)
-                self.sender(pager, self.config)
-                self.logger.info("Pager %s erfolgreich ausgelöst", pager)
-            except Exception as exc:  # keep Leitstellensoftware running
-                self.logger.error(
-                    "Pager %s konnte nicht ausgelöst werden: %s. Die normale Fahrzeugalarmierung wurde trotzdem verarbeitet.",
-                    pager if 'pager' in locals() else '?',
-                    exc,
-                )
-            finally:
-                self._queue.task_done()
-
-    def _resolve_sender_script(self, script: Path) -> Path:
-        if script.is_absolute():
-            return script
-        cwd_script = Path.cwd() / script
-        if cwd_script.exists():
-            return cwd_script
-        return Path(__file__).resolve().parent / script
-
     def _send_subprocess(self, pager: int, config: PagerConfig) -> None:
-        script = self._resolve_sender_script(config.sender_script)
+        script = config.sender_script
         if not script.exists():
             raise FileNotFoundError(f"{script} nicht gefunden")
         cmd = [
@@ -184,12 +115,10 @@ class PagerService:
             str(config.gpio),
             "--power",
             f"0x{config.power:02X}",
+            "--repeats",
+            str(config.repeats),
             "--yes",
         ]
         if not config.inverted:
             cmd.append("--no-invert")
-        try:
-            subprocess.run(cmd, check=True, timeout=config.timeout_seconds, capture_output=True, text=True)
-        except subprocess.CalledProcessError as exc:
-            details = (exc.stderr or exc.stdout or str(exc)).strip()
-            raise RuntimeError(details or f"td175p_send.py wurde mit Code {exc.returncode} beendet") from exc
+        subprocess.run(cmd, check=True, timeout=config.timeout_seconds, capture_output=True, text=True)
