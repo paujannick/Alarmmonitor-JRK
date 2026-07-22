@@ -161,5 +161,6 @@ def test_sender_script_resolves_relative_to_repository(monkeypatch):
     service._send_subprocess(4, service.config)
     assert calls
     assert calls[0][0][1].endswith('/td175p_send.py')
-    assert '--spi-bus' in calls[0][0]
-    assert '--spi-device' in calls[0][0]
+    assert calls[0][0][-2:] == ['4', '--yes']
+    assert '--spi-bus' not in calls[0][0]
+    assert '--spi-device' not in calls[0][0]
