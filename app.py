@@ -365,9 +365,10 @@ def load_settings():
         pager_settings = data.get('pager') or {}
         if isinstance(pager_settings, dict):
             merged_pager = settings['pager'].copy()
-            for key in ('enabled', 'inverted'):
+            for key in ('inverted',):
                 if key in pager_settings:
                     merged_pager[key] = parse_bool(pager_settings.get(key), merged_pager[key])
+            merged_pager['enabled'] = True
             for key in ('gpio', 'spi_bus', 'spi_device', 'power', 'repeats'):
                 if key in pager_settings:
                     try:

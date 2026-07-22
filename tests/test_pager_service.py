@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+from pathlib import Path
 from importlib import reload
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -142,3 +143,23 @@ def test_manual_pager_test_does_not_change_vehicle_status():
     assert response.get_json()['queued'] is True
     assert enqueued == [(1, 'RTW1')]
     assert app.vehicles['RTW1']['status'] == 2
+
+
+def test_pager_settings_cannot_disable_transmission():
+    config = PagerConfig.from_settings({'pager': {'enabled': False}})
+    assert config.enabled is True
+
+
+def test_sender_script_resolves_relative_to_repository(monkeypatch):
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+
+    monkeypatch.setattr('pager_service.subprocess.run', fake_run)
+    service = PagerService(PagerConfig(sender_script=Path('td175p_send.py')), ListLogger())
+    service._send_subprocess(4, service.config)
+    assert calls
+    assert calls[0][0][1].endswith('/td175p_send.py')
+    assert '--spi-bus' in calls[0][0]
+    assert '--spi-device' in calls[0][0]

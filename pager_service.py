@@ -45,7 +45,7 @@ class PagerConfig:
         if not isinstance(raw, dict):
             raw = {}
         return cls(
-            enabled=_as_bool(raw.get("enabled"), cls.enabled),
+            enabled=cls.enabled,
             gpio=_as_int(raw.get("gpio"), cls.gpio),
             spi_bus=_as_int(raw.get("spi_bus"), cls.spi_bus),
             spi_device=_as_int(raw.get("spi_device"), cls.spi_device),
@@ -148,6 +148,8 @@ class PagerService:
 
     def _send_subprocess(self, pager: int, config: PagerConfig) -> None:
         script = config.sender_script
+        if not script.is_absolute():
+            script = Path(__file__).resolve().parent / script
         if not script.exists():
             raise FileNotFoundError(f"{script} nicht gefunden")
         cmd = [
@@ -156,6 +158,10 @@ class PagerService:
             str(pager),
             "--gpio",
             str(config.gpio),
+            "--spi-bus",
+            str(config.spi_bus),
+            "--spi-device",
+            str(config.spi_device),
             "--power",
             f"0x{config.power:02X}",
             "--repeats",
