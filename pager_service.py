@@ -103,6 +103,49 @@ class PagerService:
         atexit.register(self.stop)
         if not self.config.enabled:
             self.logger.info("Pagerfunktion ist deaktiviert; Pageraufträge werden nur protokolliert.")
+
+    def stop(self) -> None:
+        if not self._thread:
+            return
+        self._stop.set()
+        self._queue.put(None)
+        self._thread.join(timeout=2)
+
+    def enqueue(self, pager: int | None, unit: str | None = None) -> bool:
+        if pager is None:
+            self.logger.info("Kein Pager für %s hinterlegt; überspringe Pageralarm.", unit or "unbekannte Einheit")
+            return False
+        try:
+            pager = pager_bcd(int(pager))
+        except (TypeError, ValueError) as exc:
+            self.logger.error("Ungültige Pagernummer für %s: %s", unit or "unbekannte Einheit", exc)
+            return False
+        # Store the decimal pager number, not the encoded BCD byte, for sender compatibility.
+        decoded_pager = ((pager >> 4) * 10) + (pager & 0x0F)
+        if not self.config.enabled:
+            self.logger.info("Pagerfunktion ist deaktiviert; Auftrag für %s/%s nicht gesendet.", unit or "unbekannte Einheit", decoded_pager)
+            return False
+        self._queue.put((decoded_pager, unit))
+        self.logger.info("Pagerauftrag für %s/%s eingereiht.", unit or "unbekannte Einheit", decoded_pager)
+        return True
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            try:
+                job = self._queue.get(timeout=0.2)
+            except Empty:
+                continue
+            try:
+                if job is None:
+                    return
+                pager, unit = job
+                self.logger.info("Sende Pageralarm an %s/%s.", unit or "unbekannte Einheit", pager)
+                self.sender(pager, self.config)
+            except Exception as exc:  # noqa: BLE001 - worker must survive transmission failures
+                self.logger.error("Pageralarm fehlgeschlagen: %s", exc)
+            finally:
+                self._queue.task_done()
+
     def _send_subprocess(self, pager: int, config: PagerConfig) -> None:
         script = config.sender_script
         if not script.exists():

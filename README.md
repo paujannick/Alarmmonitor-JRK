@@ -24,6 +24,21 @@ Komplettlösung für einen webbasierten Alarmmonitor und ein Leitstellen-Interfa
 Die Audiodatei ist aus dem Repository ausgeschlossen. Lege eine passende
 `gong.wav` unter `static/` ab, damit der Alarmton abgespielt wird.
 
+
+## Windows-Start
+
+Unter Windows bleiben Fehlermeldungen nun sichtbar, wenn der Start per
+Doppelklick fehlschlägt. Verwende dafür die Windows-Batchdateien im
+Projektordner:
+
+```bat
+install_windows.bat
+start_windows.bat
+```
+
+Falls `start_windows.bat` abbricht, das Fenster geöffnet lassen und die
+sichtbare Fehlermeldung bzw. den Fehlercode prüfen.
+
 ## Installation
 ```bash
 ./install.sh
