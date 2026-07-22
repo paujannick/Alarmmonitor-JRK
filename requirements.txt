@@ -1,1 +1,3 @@
 Flask
+RPi.GPIO
+spidev
