@@ -150,17 +150,40 @@ def test_pager_settings_cannot_disable_transmission():
     assert config.enabled is True
 
 
-def test_sender_script_resolves_relative_to_repository(monkeypatch):
+def test_sender_script_receives_configured_cli_options(monkeypatch):
     calls = []
 
     def fake_run(cmd, **kwargs):
         calls.append((cmd, kwargs))
 
     monkeypatch.setattr('pager_service.subprocess.run', fake_run)
-    service = PagerService(PagerConfig(sender_script=Path('td175p_send.py')), ListLogger())
+    config = PagerConfig(
+        sender_script=Path('td175p_send.py'),
+        gpio=25,
+        spi_bus=1,
+        spi_device=2,
+        power=0x60,
+        repeats=12,
+    )
+    service = PagerService(config, ListLogger())
     service._send_subprocess(4, service.config)
     assert calls
     assert calls[0][0][1].endswith('/td175p_send.py')
-    assert calls[0][0][-2:] == ['4', '--yes']
-    assert '--spi-bus' not in calls[0][0]
-    assert '--spi-device' not in calls[0][0]
+    assert calls[0][0][2:] == [
+        '4',
+        '--gpio',
+        '25',
+        '--spi-bus',
+        '1',
+        '--spi-device',
+        '2',
+        '--power',
+        '0x60',
+        '--repeats',
+        '12',
+        '--yes',
+    ]
+
+
+def test_pager_default_power_matches_sender_script_default():
+    assert PagerConfig().power == 0x60
