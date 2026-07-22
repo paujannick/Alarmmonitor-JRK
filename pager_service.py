@@ -156,18 +156,6 @@ class PagerService:
             sys.executable,
             str(script),
             str(pager),
-            "--gpio",
-            str(config.gpio),
-            "--spi-bus",
-            str(config.spi_bus),
-            "--spi-device",
-            str(config.spi_device),
-            "--power",
-            f"0x{config.power:02X}",
-            "--repeats",
-            str(config.repeats),
             "--yes",
         ]
-        if not config.inverted:
-            cmd.append("--no-invert")
         subprocess.run(cmd, check=True, timeout=config.timeout_seconds, capture_output=True, text=True)
