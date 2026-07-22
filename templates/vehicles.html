@@ -34,6 +34,15 @@
             <label class="form-label" for="vehicle-tts">Sprachausgabe</label>
             <input type="text" name="tts" id="vehicle-tts" class="form-control" placeholder="Rotkreuz Rettungswagen 1">
           </div>
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label" for="vehicle-pager">Pager</label>
+            <select name="pager" id="vehicle-pager" class="form-select">
+              <option value="">Kein Pager</option>
+              {% for pager in range(1, 31) %}
+                <option value="{{ pager }}">Pager {{ pager }}</option>
+              {% endfor %}
+            </select>
+          </div>
           <div class="col-12">
             <label class="form-label" for="vehicle-crew-table">Besatzung</label>
             <div class="table-responsive rounded-3 border border-secondary-subtle">
@@ -71,6 +80,7 @@
                 <th>Besatzung</th>
                 <th>Sprachausgabe</th>
                 <th>Status</th>
+                <th>Pager</th>
                 <th>Icon</th>
                 <th class="text-end">Aktion</th>
               </tr>
@@ -101,6 +111,15 @@
                 <td><input type="text" class="form-control form-control-sm tts" value="{{ info.tts }}" placeholder="Sprachausgabe"></td>
                 <td>
                   <span class="badge bg-secondary-subtle text-uppercase text-dark fw-semibold">{{ status_text.get(info.status, info.status) }}</span>
+                </td>
+                <td>
+                  <select class="form-select form-select-sm pager mb-2">
+                    <option value="">Kein Pager</option>
+                    {% for pager in range(1, 31) %}
+                      <option value="{{ pager }}" {% if info.pager == pager %}selected{% endif %}>Pager {{ pager }}</option>
+                    {% endfor %}
+                  </select>
+                  <button type="button" class="btn btn-outline-light btn-sm test-pager" {% if not info.pager %}disabled{% endif %}>Pager testen</button>
                 </td>
                 <td class="icon-cell">
                   {% if info.icon %}<img src="{{ url_for('static', filename=info.icon) }}" height="32" class="mb-2" alt="{{ name }} Icon">{% endif %}
@@ -192,6 +211,7 @@ if (form && newCrewTable) {
     const payload = Object.fromEntries(formData.entries());
     payload.crew = getCrewFromTable(newCrewTable);
     payload.tts = payload.tts || '';
+    payload.pager = payload.pager || null;
     try {
       const res = await fetch('/api/vehicles', {
         method: 'POST',
@@ -262,6 +282,7 @@ document.querySelectorAll('#vehicle-list .save').forEach(button => {
       callsign: row.querySelector('.callsign')?.value || '',
       crew: getCrewFromTable(row.querySelector('.crew-table')),
       tts: row.querySelector('.tts')?.value || '',
+      pager: row.querySelector('.pager')?.value || null,
     };
     try {
       const res = await fetch(`/api/vehicles/${encodeURIComponent(unit)}`, {
@@ -273,9 +294,34 @@ document.querySelectorAll('#vehicle-list .save').forEach(button => {
       if (!res.ok || !data.ok) {
         throw new Error((data && data.error) || 'Fahrzeug konnte nicht gespeichert werden.');
       }
+      const testButton = row.querySelector('.test-pager');
+      if (testButton) {
+        testButton.disabled = !payload.pager;
+      }
       showVehicleFeedback(`Fahrzeug ${unit} wurde aktualisiert.`);
     } catch (err) {
       showVehicleFeedback(err.message || 'Fahrzeug konnte nicht gespeichert werden.', 'danger');
+    }
+  });
+});
+
+document.querySelectorAll('#vehicle-list .test-pager').forEach(button => {
+  button.addEventListener('click', async event => {
+    const row = event.target.closest('tr');
+    const unit = row?.dataset.unit;
+    if (!unit) return;
+    if (!window.confirm(`Pager für ${unit} wirklich testen? Es wird kein Fahrzeugalarm ausgelöst.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/vehicles/${encodeURIComponent(unit)}/pager-test`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error((data && data.error) || 'Pagerauftrag konnte nicht eingeplant werden.');
+      }
+      showVehicleFeedback(`Pagerauftrag für ${unit} wurde eingeplant.`);
+    } catch (err) {
+      showVehicleFeedback(err.message || 'Pagerauftrag konnte nicht eingeplant werden.', 'danger');
     }
   });
 });

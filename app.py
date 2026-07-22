@@ -10,6 +10,8 @@ from copy import deepcopy
 import re
 import secrets
 
+from pager_service import PagerConfig, PagerService, pager_payload
+
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
 
@@ -100,6 +102,7 @@ DEFAULT_VEHICLES = {
         'alarm_time': None,
         'incident_id': None,
         'priority': '',
+        'pager': None,
     },
     'RTW2': {
         'name': 'Rettungswagen 2',
@@ -116,6 +119,7 @@ DEFAULT_VEHICLES = {
         'alarm_time': None,
         'incident_id': None,
         'priority': '',
+        'pager': None,
     },
     'KTW1': {
         'name': 'Krankentransportwagen 1',
@@ -132,6 +136,7 @@ DEFAULT_VEHICLES = {
         'alarm_time': None,
         'incident_id': None,
         'priority': '',
+        'pager': None,
     },
 }
 
@@ -176,6 +181,15 @@ DEFAULT_SETTINGS = {
         'router_name': 'TP-Link Reise Router',
         'admin_url': 'http://tplinkwifi.net',
         'notes': '',
+    },
+    'pager': {
+        'enabled': False,
+        'gpio': 24,
+        'spi_bus': 0,
+        'spi_device': 0,
+        'power': 0xC0,
+        'repeats': 30,
+        'inverted': True,
     },
 }
 
@@ -346,6 +360,19 @@ def load_settings():
                 if isinstance(value, str):
                     merged_network[key] = value.strip()
             settings['network'] = merged_network
+        pager_settings = data.get('pager') or {}
+        if isinstance(pager_settings, dict):
+            merged_pager = settings['pager'].copy()
+            for key in ('enabled', 'inverted'):
+                if key in pager_settings:
+                    merged_pager[key] = parse_bool(pager_settings.get(key), merged_pager[key])
+            for key in ('gpio', 'spi_bus', 'spi_device', 'power', 'repeats'):
+                if key in pager_settings:
+                    try:
+                        merged_pager[key] = int(str(pager_settings.get(key)), 0)
+                    except (TypeError, ValueError):
+                        pass
+            settings['pager'] = merged_pager
     return settings
 
 
@@ -354,6 +381,17 @@ def save_settings():
     with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
         json.dump(settings, f, ensure_ascii=False, indent=2)
     notify_change()
+
+
+def normalise_pager_number(value):
+    if value in (None, ''):
+        return None
+    try:
+        pager = int(value)
+    except (TypeError, ValueError):
+        raise ValueError('Pagernummer muss zwischen 1 und 30 liegen.')
+    pager_payload(pager)
+    return pager
 
 
 def load_vehicles():
@@ -376,6 +414,7 @@ def load_vehicles():
                     info['alarm_time'] = info.pop('alarm', None)
                 info.setdefault('incident_id', None)
                 info.setdefault('priority', '')
+                info['pager'] = normalise_pager_number(info.get('pager'))
             return data
     data = DEFAULT_VEHICLES.copy()
     return data
@@ -579,6 +618,8 @@ templates = load_templates()
 priorities = load_priorities()
 announcements = load_announcements()
 settings = load_settings()
+pager_service = PagerService(PagerConfig.from_settings(settings), app.logger)
+pager_service.start()
 
 listeners = []
 CACHE_MAX_ENTRIES = 128
@@ -885,6 +926,10 @@ def api_add_vehicle():
     callsign = data.get('callsign', '')
     crew = data.get('crew', [])
     tts = data.get('tts', '')
+    try:
+        pager = normalise_pager_number(data.get('pager'))
+    except ValueError as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
     if unit and unit not in vehicles:
         vehicles[unit] = {
             'name': name,
@@ -901,6 +946,7 @@ def api_add_vehicle():
             'alarm_time': None,
             'incident_id': None,
             'priority': '',
+            'pager': pager,
         }
         save_vehicles()
         return jsonify({'ok': True})
@@ -918,6 +964,7 @@ def api_update_vehicle(unit):
     crew = data.get('crew')
     tts = data.get('tts')
     base = data.get('base')
+    pager_value = data.get('pager') if 'pager' in data else None
     if name is not None:
         info['name'] = name
     if callsign is not None:
@@ -928,8 +975,27 @@ def api_update_vehicle(unit):
         info['tts'] = tts
     if base is not None:
         info['base'] = base
+    if 'pager' in data:
+        try:
+            info['pager'] = normalise_pager_number(pager_value)
+        except ValueError as exc:
+            return jsonify({'ok': False, 'error': str(exc)}), 400
     save_vehicles()
     return jsonify({'ok': True})
+
+
+@app.route('/api/vehicles/<unit>/pager-test', methods=['POST'])
+def api_test_vehicle_pager(unit):
+    if unit not in vehicles:
+        return jsonify({'ok': False}), 404
+    pager = vehicles[unit].get('pager')
+    try:
+        enqueued = pager_service.enqueue(normalise_pager_number(pager), unit)
+    except ValueError as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+    if not enqueued:
+        return jsonify({'ok': False, 'error': 'Für dieses Fahrzeug ist kein Pager hinterlegt.'}), 400
+    return jsonify({'ok': True, 'queued': True})
 
 
 @app.route('/api/vehicles/<unit>/icon', methods=['POST'])
@@ -1220,6 +1286,7 @@ def api_alert_incident(inc_id):
                     info['alarm_time'] = now
                     info['incident_id'] = inc_id
                     info['priority'] = inc.get('priority', '')
+                    pager_service.enqueue(info.get('pager'), unit)
                 alerted.append(unit)
             save_incidents()
             save_vehicles()
