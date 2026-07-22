@@ -183,7 +183,9 @@ DEFAULT_SETTINGS = {
         'notes': '',
     },
     'pager': {
-        'enabled': False,
+
+        'enabled': True,
+
         'gpio': 24,
         'spi_bus': 0,
         'spi_device': 0,

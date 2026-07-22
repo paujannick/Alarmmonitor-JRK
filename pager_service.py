@@ -29,7 +29,7 @@ def pager_payload(pager: int) -> bytes:
 
 @dataclass(frozen=True)
 class PagerConfig:
-    enabled: bool = False
+    enabled: bool = True
     gpio: int = 24
     spi_bus: int = 0
     spi_device: int = 0
@@ -103,63 +103,6 @@ class PagerService:
         atexit.register(self.stop)
         if not self.config.enabled:
             self.logger.info("Pagerfunktion ist deaktiviert; Pageraufträge werden nur protokolliert.")
-
-    def stop(self, timeout: float = 2.0) -> None:
-        self._stop.set()
-        self._queue.put(None)
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=timeout)
-
-    def enqueue(self, pager: int | None, unit: str | None = None) -> bool:
-        if pager is None:
-            return False
-        pager_payload(pager)
-        self._queue.put((pager, unit))
-        if unit:
-            self.logger.info("Pager %s für %s eingeplant", pager, unit)
-        else:
-            self.logger.info("Pager %s eingeplant", pager)
-        return True
-
-    def wait_until_idle(self, timeout: float = 5.0) -> bool:
-        finished = threading.Event()
-        self._queue.put((0, "__barrier__"))
-        deadline = threading.Timer(timeout, finished.set)
-        deadline.start()
-        while not finished.is_set():
-            if self._queue.unfinished_tasks == 0:
-                deadline.cancel()
-                return True
-            finished.wait(0.01)
-        return False
-
-    def _run(self) -> None:
-        while not self._stop.is_set():
-            try:
-                item = self._queue.get(timeout=0.2)
-            except Empty:
-                continue
-            try:
-                if item is None:
-                    return
-                pager, unit = item
-                if unit == "__barrier__":
-                    continue
-                if not self.config.enabled:
-                    self.logger.info("Pager %s nicht gesendet, weil die Pagerfunktion deaktiviert ist", pager)
-                    continue
-                self.logger.info("Pager %s wird gesendet", pager)
-                self.sender(pager, self.config)
-                self.logger.info("Pager %s erfolgreich ausgelöst", pager)
-            except Exception as exc:  # keep Leitstellensoftware running
-                self.logger.error(
-                    "Pager %s konnte nicht ausgelöst werden: %s. Die normale Fahrzeugalarmierung wurde trotzdem verarbeitet.",
-                    pager if 'pager' in locals() else '?',
-                    exc,
-                )
-            finally:
-                self._queue.task_done()
-
     def _send_subprocess(self, pager: int, config: PagerConfig) -> None:
         script = config.sender_script
         if not script.exists():
