@@ -94,8 +94,8 @@ create_service_file() {
   cat > "$tmpfile" <<SERVICE
 [Unit]
 Description=Alarmmonitor JRK
-After=network-online.target
-Wants=network-online.target
+After=network-online.target pigpiod.service
+Wants=network-online.target pigpiod.service
 
 [Service]
 Type=simple
