@@ -15,120 +15,87 @@
 
 <div class="alert alert-danger d-none" role="alert" id="dispatch-status-error"></div>
 
-<div class="dispatch-announcement card shadow-sm mb-5">
-  <div class="card-body">
-    <div class="d-flex flex-column flex-lg-row gap-3 align-items-stretch align-items-lg-end">
-      <div class="flex-grow-1">
-        <label class="form-label text-uppercase fw-semibold text-white-50 small" for="announcement-text">Nur Durchsage</label>
-        <input type="text" class="form-control form-control-lg" id="announcement-text" placeholder="Text für die Durchsage eingeben">
-      </div>
-      <div class="d-flex gap-2">
-        <button type="button" class="btn btn-outline-light" id="announcement-clear">Zurücksetzen</button>
-        <button type="button" class="btn btn-info btn-lg" id="announcement-send">Durchsage starten</button>
-      </div>
-    </div>
-    <p class="text-white-50 small mb-0 mt-3">Spielt den Gong und gibt die Nachricht mit „Achtung, eine Durchsage“ aus.</p>
-  </div>
-</div>
+<div class="dispatch-shell">
+  <nav class="dispatch-rail" aria-label="Leitstellenbereiche">
+    <button type="button" class="dispatch-rail__tab active" data-dispatch-tab="vehicles" aria-controls="dispatch-tab-vehicles" aria-selected="true">Fahrzeuge</button>
+    <button type="button" class="dispatch-rail__tab" data-dispatch-tab="incidents" aria-controls="dispatch-tab-incidents" aria-selected="false">Einsätze</button>
+    <button type="button" class="dispatch-rail__tab" data-dispatch-tab="announcement" aria-controls="dispatch-tab-announcement" aria-selected="false">Durchsage</button>
+    <button type="button" class="dispatch-rail__tab" data-dispatch-tab="map" aria-controls="dispatch-tab-map" aria-selected="false">Karte</button>
+  </nav>
 
-<div class="vehicle-board-header mt-5 d-flex justify-content-between align-items-center">
-  <h2 class="mb-0">Fahrzeugübersicht</h2>
-  <button type="button" class="btn btn-outline-light btn-sm" id="vehicle-board-toggle" aria-expanded="true">
-    Übersicht einklappen
-  </button>
-</div>
-<div id="vehicle-board-container" class="vehicle-board-container">
-<div id="dispatch-vehicle-board" class="status-grid">
-  {% for name, info in vehicles.items() %}
-  <div class="card status-card dispatch-card" data-unit="{{ name }}">
-    <div class="card-header d-flex justify-content-between align-items-start">
-      <div>
-        <h5 class="card-title mb-0">{{ name }}</h5>
-        <small class="dispatch-callsign d-block">{{ info.callsign or info.name }}</small>
+  <div class="dispatch-workspace">
+    <section class="dispatch-tab-panel active" id="dispatch-tab-vehicles" data-dispatch-panel="vehicles">
+      <div class="dispatch-section-header d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <p class="dispatch-section-kicker mb-1">Fahrzeuge</p>
+          <h2 class="mb-0">Fahrzeugübersicht</h2>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button type="button" class="btn btn-outline-light btn-sm dispatch-popout" data-popout-panel="vehicles">Als Fenster öffnen</button>
+          <button type="button" class="btn btn-outline-light btn-sm" id="vehicle-board-toggle" aria-expanded="true">Übersicht einklappen</button>
+        </div>
       </div>
-      <span class="availability badge rounded-pill"></span>
-    </div>
-    <div class="card-body">
-      <p class="current-status mb-3">
-        <span class="badge bg-primary">Status {{ info.status }} – {{ status_text[info.status] }}</span>
-      </p>
-      <div class="dispatch-meta mb-3">
-        <span class="meta-label">Ort</span>
-        <span class="meta-value dispatch-location">{{ info.location or '—' }}</span>
-      </div>
-      <div class="spacer mb-4"></div>
-      <div class="mb-3">
-        <label class="form-label form-label-sm text-uppercase fw-semibold text-white-50" for="status-select-{{ loop.index }}">Status ändern</label>
-        <select class="form-select form-select-sm status-select" id="status-select-{{ loop.index }}" data-unit="{{ name }}">
-          {% for code, text in status_text|dictsort %}
-          <option value="{{ code }}" {% if code == info.status %}selected{% endif %}>{{ code }} – {{ text }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="d-flex status-buttons">
-        {% for code in [0, 1, 2, 3, 4, 5, 6] %}
-        <button type="button" class="btn btn-sm status-btn {% if code == info.status %}btn-primary{% else %}btn-outline-secondary{% endif %}" data-status="{{ code }}" title="Status {{ code }} – {{ status_text[code] }}">
-          {{ code }}
-        </button>
-        {% endfor %}
-      </div>
-      <div class="incident-actions d-flex align-items-center justify-content-between mt-4">
-        <span class="incident-tag badge bg-danger-subtle text-danger-emphasis {% if not info.incident_id %}d-none{% endif %}">Einsatz #{{ info.incident_id }}</span>
-        <button type="button" class="btn btn-warning btn-sm incident-jump {% if not info.incident_id %}d-none{% endif %}" data-incident-id="{{ info.incident_id or '' }}">
-          Einsatz bearbeiten
-        </button>
-      </div>
-    </div>
-  </div>
-  {% endfor %}
-</div>
-</div>
-<div class="d-flex justify-content-between align-items-center mt-5 mb-3">
-  <h2 class="mb-0">Einsätze</h2>
-  <span class="text-white-50 small">Gesamt: {{ incidents|length }}</span>
-</div>
-<div class="dispatch-panel shadow-sm">
-  <div class="table-responsive">
-    <table class="table table-dark table-hover align-middle mb-0" id="incident-list">
-      <thead>
-        <tr><th>ID</th><th>Start</th><th>Fahrzeuge</th><th>Ort</th><th>Stichwort</th><th>Aktiv</th><th>Notizen</th><th>Protokoll</th><th>Aktion</th></tr>
-      </thead>
-      <tbody>
-      {% for inc in incidents %}
-        <tr data-id="{{ inc.id }}">
-          <td>{{ inc.id }}</td>
-          <td>{{ inc.start|format_local }}</td>
-          <td>{{ inc.vehicles|join(', ') }}</td>
-          <td>{{ inc.location.name }}</td>
-          <td>{{ inc.keyword }}</td>
-          <td>{{ 'Ja' if inc.active else 'Nein' }}</td>
-          <td>
-            <ul class="list-unstyled mb-0">
-              {% for n in inc.notes %}
-              <li>{{ n.time|format_local }} - {{ n.text }}</li>
-              {% endfor %}
-            </ul>
-          </td>
-          <td>
-            <ul class="list-unstyled mb-0">
-              {% for l in inc.log or [] %}
-              <li>{{ l.time|format_local }} - {{ l.unit }}: {{ l.status if l.status is string else l.status ~ ' - ' ~ status_text[l.status] }}</li>
-              {% endfor %}
-            </ul>
-          </td>
-          <td class="incident-actions-col">
-            <div class="btn-group btn-group-sm" role="group">
-              <button class="btn btn-outline-light edit">Bearbeiten</button>
-              {% if inc.active %}
-              <button class="btn btn-outline-success end">Beenden</button>
-              {% endif %}
-              <button class="btn btn-outline-danger delete">Löschen</button>
+      <div id="vehicle-board-container" class="vehicle-board-container">
+        <div id="dispatch-vehicle-board" class="status-grid">
+          {% for name, info in vehicles.items() %}
+          <div class="card status-card dispatch-card" data-unit="{{ name }}">
+            <div class="card-header d-flex justify-content-between align-items-start">
+              <div>
+                <h5 class="card-title mb-0">{{ name }}</h5>
+                <small class="dispatch-callsign d-block">{{ info.callsign or info.name }}</small>
+              </div>
+              <span class="availability badge rounded-pill"></span>
             </div>
-          </td>
-        </tr>
+            <div class="card-body">
+              <p class="current-status mb-3"><span class="badge bg-primary">Status {{ info.status }} – {{ status_text[info.status] }}</span></p>
+              <div class="dispatch-meta mb-3"><span class="meta-label">Ort</span><span class="meta-value dispatch-location">{{ info.location or '—' }}</span></div>
+              <div class="mb-3">
+                <label class="form-label form-label-sm text-uppercase fw-semibold text-white-50" for="status-select-{{ loop.index }}">Status ändern</label>
+                <select class="form-select form-select-sm status-select" id="status-select-{{ loop.index }}" data-unit="{{ name }}">
+                  {% for code, text in status_text|dictsort %}<option value="{{ code }}" {% if code == info.status %}selected{% endif %}>{{ code }} – {{ text }}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="d-flex status-buttons">
+                {% for code in [0, 1, 2, 3, 4, 5, 6] %}<button type="button" class="btn btn-sm status-btn {% if code == info.status %}btn-primary{% else %}btn-outline-secondary{% endif %}" data-status="{{ code }}" title="Status {{ code }} – {{ status_text[code] }}">{{ code }}</button>{% endfor %}
+              </div>
+              <div class="incident-actions d-flex align-items-center justify-content-between mt-4">
+                <span class="incident-tag badge bg-danger-subtle text-danger-emphasis {% if not info.incident_id %}d-none{% endif %}">Einsatz #{{ info.incident_id }}</span>
+                <button type="button" class="btn btn-warning btn-sm incident-jump {% if not info.incident_id %}d-none{% endif %}" data-incident-id="{{ info.incident_id or '' }}">Einsatz bearbeiten</button>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <section class="dispatch-tab-panel" id="dispatch-tab-incidents" data-dispatch-panel="incidents">
+      <div class="dispatch-section-header d-flex justify-content-between align-items-center mb-3">
+        <div><p class="dispatch-section-kicker mb-1">Einsätze</p><h2 class="mb-0">Einsatzkacheln</h2></div>
+        <div class="d-flex flex-wrap gap-2 align-items-center"><span class="text-white-50 small">Gesamt: {{ incidents|length }}</span><button type="button" class="btn btn-outline-light btn-sm dispatch-popout" data-popout-panel="incidents">Als Fenster öffnen</button></div>
+      </div>
+      <div class="incident-card-grid" id="incident-list">
+      {% for inc in incidents %}
+        <article class="dispatch-incident-card {% if inc.active %}is-active{% else %}is-closed{% endif %}" data-id="{{ inc.id }}">
+          <div class="dispatch-incident-card__head"><div><span class="incident-id">#{{ inc.id }}</span><h3>{{ inc.keyword or 'Ohne Stichwort' }}</h3></div><span class="badge {% if inc.active %}bg-danger{% else %}bg-secondary{% endif %}">{{ 'Aktiv' if inc.active else 'Beendet' }}</span></div>
+          <dl class="dispatch-incident-card__meta"><div><dt>Start</dt><dd>{{ inc.start|format_local }}</dd></div><div><dt>Ort</dt><dd>{{ inc.location.name }}</dd></div><div><dt>Fahrzeuge</dt><dd>{{ inc.vehicles|join(', ') or '—' }}</dd></div></dl>
+          <div class="dispatch-incident-card__notes"><strong>Notizen</strong>{% if inc.notes %}<ul>{% for n in inc.notes[-2:] %}<li>{{ n.time|format_local }} - {{ n.text }}</li>{% endfor %}</ul>{% else %}<p>Keine Notizen.</p>{% endif %}</div>
+          <div class="btn-group btn-group-sm mt-auto" role="group"><button class="btn btn-outline-light edit">Bearbeiten</button>{% if inc.active %}<button class="btn btn-outline-success end">Beenden</button>{% endif %}<button class="btn btn-outline-danger delete">Löschen</button></div>
+        </article>
       {% endfor %}
-      </tbody>
-    </table>
+      </div>
+    </section>
+
+    <section class="dispatch-tab-panel" id="dispatch-tab-announcement" data-dispatch-panel="announcement">
+      <div class="dispatch-announcement card shadow-sm">
+        <div class="card-body"><div class="d-flex flex-column flex-lg-row gap-3 align-items-stretch align-items-lg-end"><div class="flex-grow-1"><label class="form-label text-uppercase fw-semibold text-white-50 small" for="announcement-text">Nur Durchsage</label><input type="text" class="form-control form-control-lg" id="announcement-text" placeholder="Text für die Durchsage eingeben"></div><div class="d-flex gap-2"><button type="button" class="btn btn-outline-light" id="announcement-clear">Zurücksetzen</button><button type="button" class="btn btn-info btn-lg" id="announcement-send">Durchsage starten</button></div></div><p class="text-white-50 small mb-0 mt-3">Spielt den Gong und gibt die Nachricht mit „Achtung, eine Durchsage“ aus.</p></div>
+      </div>
+    </section>
+
+    <section class="dispatch-tab-panel" id="dispatch-tab-map" data-dispatch-panel="map">
+      <div class="dispatch-section-header d-flex justify-content-between align-items-center mb-3"><div><p class="dispatch-section-kicker mb-1">Karte</p><h2 class="mb-0">Lagekarte</h2></div><button type="button" class="btn btn-outline-light btn-sm dispatch-popout" data-popout-panel="map">Als Fenster öffnen</button></div>
+      <div id="dispatch-overview-map" class="dispatch-overview-map" role="application" aria-label="Lagekarte der Leitstelle"></div>
+    </section>
   </div>
 </div>
 
@@ -308,6 +275,11 @@ const MODAL_BACKDROP_STACK_CLASS = 'modal-backdrop-stack-top';
 const incidentLocationInput = document.getElementById('incident-location');
 const incidentLatInput = document.getElementById('incident-lat');
 const incidentLonInput = document.getElementById('incident-lon');
+const dispatchTabs = Array.from(document.querySelectorAll('[data-dispatch-tab]'));
+const dispatchPanels = Array.from(document.querySelectorAll('[data-dispatch-panel]'));
+const overviewMapEl = document.getElementById('dispatch-overview-map');
+let overviewMap = null;
+let overviewMapLayer = null;
 const LOCATION_STATUS_DEFAULT = 'Klicken Sie auf die Karte, um einen Einsatzort zu setzen.';
 if (locationPickerStatus) {
   locationPickerStatus.textContent = LOCATION_STATUS_DEFAULT;
@@ -319,6 +291,82 @@ let locationPickerLatLng = null;
 let locationPickerAddress = '';
 let locationPickerRequestId = 0;
 let locationPickerSearchAbort = null;
+
+
+function setDispatchTab(tabName, options = {}) {
+  const target = tabName || 'vehicles';
+  dispatchTabs.forEach(tab => {
+    const isActive = tab.dataset.dispatchTab === target;
+    tab.classList.toggle('active', isActive);
+    tab.setAttribute('aria-selected', String(isActive));
+  });
+  dispatchPanels.forEach(panel => {
+    panel.classList.toggle('active', panel.dataset.dispatchPanel === target);
+  });
+  if (target === 'map') {
+    setTimeout(() => {
+      ensureOverviewMap();
+      renderOverviewMapMarkers();
+      if (overviewMap) overviewMap.invalidateSize();
+    }, 80);
+  }
+  if (!options.skipHash) {
+    window.history.replaceState(null, '', `#dispatch-${target}`);
+  }
+}
+
+dispatchTabs.forEach(tab => {
+  tab.addEventListener('click', () => setDispatchTab(tab.dataset.dispatchTab));
+});
+
+document.querySelectorAll('.dispatch-popout').forEach(button => {
+  button.addEventListener('click', () => {
+    const panel = button.dataset.popoutPanel || 'vehicles';
+    const url = new URL(window.location.href);
+    url.hash = `dispatch-${panel}`;
+    window.open(url.toString(), `leitstelle-${panel}`, 'popup=yes,width=1280,height=820');
+  });
+});
+
+const initialDispatchPanel = (window.location.hash || '').replace('#dispatch-', '');
+if (initialDispatchPanel) {
+  setDispatchTab(initialDispatchPanel, { skipHash: true });
+}
+
+function ensureOverviewMap() {
+  if (!overviewMapEl || overviewMap) return overviewMap;
+  const defaults = getOperationAreaDefaults();
+  overviewMap = L.map('dispatch-overview-map').setView([defaults.lat, defaults.lon], defaults.zoom);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(overviewMap);
+  overviewMapLayer = L.layerGroup().addTo(overviewMap);
+  return overviewMap;
+}
+
+function renderOverviewMapMarkers() {
+  if (!overviewMap || !overviewMapLayer) return;
+  overviewMapLayer.clearLayers();
+  const bounds = [];
+  Object.entries(vehiclesData).forEach(([unit, info]) => {
+    const lat = Number(info.lat);
+    const lon = Number(info.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    const marker = L.circleMarker([lat, lon], { radius: 8, color: '#0dcaf0', fillColor: '#0dcaf0', fillOpacity: 0.75 });
+    marker.bindPopup(`<strong>${escapeHtml(unit)}</strong><br>${escapeHtml(getStatusLabel(info.status))}<br>${escapeHtml(info.location || '')}`);
+    marker.addTo(overviewMapLayer);
+    bounds.push([lat, lon]);
+  });
+  {{ incidents|tojson }}.forEach(inc => {
+    const loc = inc && inc.location ? inc.location : {};
+    const lat = Number(loc.lat);
+    const lon = Number(loc.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    const marker = L.marker([lat, lon]);
+    marker.bindPopup(`<strong>Einsatz #${escapeHtml(inc.id)}</strong><br>${escapeHtml(inc.keyword || '')}<br>${escapeHtml(loc.name || '')}`);
+    marker.addTo(overviewMapLayer);
+    bounds.push([lat, lon]);
+  });
+  if (bounds.length) overviewMap.fitBounds(bounds, { padding: [32, 32], maxZoom: 15 });
+}
 
 function escapeHtml(value) {
   if (value === null || value === undefined) return '';
@@ -1249,8 +1297,8 @@ if (announcementClearBtn) {
 }
 document.querySelectorAll('#incident-list .edit').forEach(btn => {
   btn.addEventListener('click', async e => {
-    const tr = e.target.closest('tr');
-    const id = tr.dataset.id;
+    const item = e.target.closest('[data-id]');
+    const id = item.dataset.id;
     openIncidentEditor(id);
   });
 });
@@ -1471,8 +1519,8 @@ document.querySelector('#incident-form [name="template"]').addEventListener('cha
 });
 document.querySelectorAll('#incident-list .end').forEach(btn => {
   btn.addEventListener('click', async (e) => {
-    const tr = e.target.closest('tr');
-    const id = tr.dataset.id;
+    const item = e.target.closest('[data-id]');
+    const id = item.dataset.id;
     pauseAutoReload();
     try {
       const res = await fetch(`/api/incidents/${id}/end`, {method: 'POST'});
@@ -1494,8 +1542,8 @@ document.querySelectorAll('#incident-list .end').forEach(btn => {
 
 document.querySelectorAll('#incident-list .delete').forEach(btn => {
   btn.addEventListener('click', async (e) => {
-    const tr = e.target.closest('tr');
-    const id = tr.dataset.id;
+    const item = e.target.closest('[data-id]');
+    const id = item.dataset.id;
     pauseAutoReload();
     try {
       const res = await fetch(`/api/incidents/${id}`, {method: 'DELETE'});
