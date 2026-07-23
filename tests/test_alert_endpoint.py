@@ -213,3 +213,29 @@ def test_alert_handles_legacy_string_location():
     assert data['alerted'] == ['RTW1']
     assert not data['skipped']
     assert app.vehicles['RTW1']['location'] == 'Altstadt'
+
+
+def test_alert_after_save_alarms_preassigned_vehicle_once():
+    app, client = setup_app()
+    app.vehicles['RTW1']['pager'] = 4
+    enqueued = []
+    app.pager_service.enqueue = lambda pager, unit=None: enqueued.append((pager, unit)) or True
+    inc_id = client.post(
+        '/api/incidents',
+        json={'keyword': 'Test', 'location': 'Loc', 'vehicles': ['RTW1']},
+    ).get_json()['id']
+    assert app.vehicles['RTW1']['alarm_time'] is None
+
+    response = client.post(f'/api/incidents/{inc_id}/alert', json={'units': []})
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data['alerted'] == ['RTW1']
+    assert app.vehicles['RTW1']['alarm_time'] is not None
+    assert enqueued == [(4, 'RTW1')]
+
+    response = client.post(f'/api/incidents/{inc_id}/alert', json={'units': ['RTW1']})
+    data = response.get_json()
+    assert data['alerted'] == []
+    assert data['already_alerted'] == ['RTW1']
+    assert enqueued == [(4, 'RTW1')]

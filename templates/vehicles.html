@@ -5,6 +5,7 @@
     <h1 class="mb-1">Fahrzeugverwaltung</h1>
     <p class="text-body-secondary mb-0">Pflege Fahrzeugdaten, Funkrufnamen und Besatzungen für den Alarmmonitor.</p>
   </div>
+  <button type="button" class="btn btn-outline-warning" id="pager-power-off">Pager ausschalten</button>
 </div>
 
 <div id="vehicle-feedback" class="alert d-none" role="alert"></div>
@@ -35,13 +36,9 @@
             <input type="text" name="tts" id="vehicle-tts" class="form-control" placeholder="Rotkreuz Rettungswagen 1">
           </div>
           <div class="col-sm-6 col-lg-3">
-            <label class="form-label" for="vehicle-pager">Pager</label>
-            <select name="pager" id="vehicle-pager" class="form-select">
-              <option value="">Kein Pager</option>
-              {% for pager in range(1, 31) %}
-                <option value="{{ pager }}">Pager {{ pager }}</option>
-              {% endfor %}
-            </select>
+            <label class="form-label" for="vehicle-pager">Pager / Lagergruppe</label>
+            <input type="number" name="pager" id="vehicle-pager" class="form-control" min="1" max="999" placeholder="Kein Pager">
+            <div class="form-text">1–30 für Fahrzeug-/Gruppenpager, 999 als Abschaltbefehl.</div>
           </div>
           <div class="col-12">
             <label class="form-label" for="vehicle-crew-table">Besatzung</label>
@@ -113,12 +110,7 @@
                   <span class="badge bg-secondary-subtle text-uppercase text-dark fw-semibold">{{ status_text.get(info.status, info.status) }}</span>
                 </td>
                 <td>
-                  <select class="form-select form-select-sm pager mb-2">
-                    <option value="">Kein Pager</option>
-                    {% for pager in range(1, 31) %}
-                      <option value="{{ pager }}" {% if info.pager == pager %}selected{% endif %}>Pager {{ pager }}</option>
-                    {% endfor %}
-                  </select>
+                  <input type="number" class="form-control form-control-sm pager mb-2" min="1" max="999" value="{{ info.pager or '' }}" placeholder="Kein Pager">
                   <button type="button" class="btn btn-outline-light btn-sm test-pager" {% if not info.pager %}disabled{% endif %}>Pager testen</button>
                 </td>
                 <td class="icon-cell">
@@ -199,6 +191,26 @@ if (addCrewButton && newCrewTable) {
   newCrewTable.addEventListener('click', event => {
     if (event.target.classList.contains('remove-crew')) {
       event.target.closest('tr')?.remove();
+    }
+  });
+}
+
+const powerOffButton = document.getElementById('pager-power-off');
+if (powerOffButton) {
+  powerOffButton.addEventListener('click', async () => {
+    if (!window.confirm('Alle Pager wirklich ausschalten? Es wird Pager 999 alarmiert.')) return;
+    powerOffButton.disabled = true;
+    try {
+      const res = await fetch('/api/pager/power-off', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        throw new Error((data && data.error) || 'Abschaltbefehl konnte nicht eingeplant werden.');
+      }
+      showVehicleFeedback('Abschaltbefehl für Pager 999 wurde eingeplant.', 'warning');
+    } catch (err) {
+      showVehicleFeedback(err.message || 'Abschaltbefehl konnte nicht eingeplant werden.', 'danger');
+    } finally {
+      powerOffButton.disabled = false;
     }
   });
 }
