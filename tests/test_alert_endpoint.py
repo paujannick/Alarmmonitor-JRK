@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+from pathlib import Path
 from importlib import reload
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -239,3 +240,12 @@ def test_alert_after_save_alarms_preassigned_vehicle_once():
     assert data['alerted'] == []
     assert data['already_alerted'] == ['RTW1']
     assert enqueued == [(4, 'RTW1')]
+
+
+def test_monitor_registers_gong_end_before_playing_audio():
+    monitor_template = Path('templates/monitor.html').read_text(encoding='utf-8')
+    enqueue_alarm = monitor_template[monitor_template.index('function enqueueAlarm'):monitor_template.index('function queueAnnouncement')]
+    play_index = enqueue_alarm.index('alarmSound.play()')
+    ended_index = enqueue_alarm.index('alarmSound.onended = finishWithTimeoutCleanup')
+    assert ended_index < play_index
+    assert 'playFallbackChime().finally(finishGong)' in monitor_template
