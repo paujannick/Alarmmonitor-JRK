@@ -1726,3 +1726,170 @@ tr.status-9 .status-color {
 .monitor-table-body {
   overflow: auto;
 }
+
+.dispatch-shell {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.dispatch-rail {
+  position: sticky;
+  top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.9rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
+}
+
+.dispatch-rail__tab {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.85rem;
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(0, 0, 0, 0.22);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: left;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.dispatch-rail__tab:hover,
+.dispatch-rail__tab:focus,
+.dispatch-rail__tab.active {
+  color: #fff;
+  border-color: rgba(var(--accent-color-rgb), 0.55);
+  background: linear-gradient(135deg, rgba(var(--accent-color-rgb), 0.28), rgba(220, 53, 69, 0.16));
+  transform: translateX(2px);
+}
+
+.dispatch-workspace {
+  min-width: 0;
+}
+
+.dispatch-tab-panel {
+  display: none;
+}
+
+.dispatch-tab-panel.active {
+  display: block;
+}
+
+.dispatch-section-header {
+  gap: 1rem;
+  padding: 1.25rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dispatch-section-kicker {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.incident-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.dispatch-incident-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 100%;
+  padding: 1.2rem;
+  border-radius: 1rem;
+  color: #fff;
+  background: linear-gradient(160deg, rgba(33, 37, 41, 0.94), rgba(12, 12, 12, 0.9));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.32);
+}
+
+.dispatch-incident-card.is-active {
+  border-color: rgba(220, 53, 69, 0.75);
+}
+
+.dispatch-incident-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.dispatch-incident-card__head h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.dispatch-incident-card .incident-id {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.dispatch-incident-card__meta {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.dispatch-incident-card__meta div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.dispatch-incident-card__meta dt,
+.dispatch-incident-card__notes strong {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.dispatch-incident-card__meta dd,
+.dispatch-incident-card__notes p,
+.dispatch-incident-card__notes ul {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.dispatch-incident-card__notes ul {
+  padding-left: 1rem;
+}
+
+.dispatch-overview-map {
+  min-height: 68vh;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+@media (max-width: 768px) {
+  .dispatch-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .dispatch-rail {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .dispatch-rail__tab {
+    min-width: 135px;
+    text-align: center;
+  }
+}
