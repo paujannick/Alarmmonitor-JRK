@@ -574,19 +574,25 @@ function warmupAudioContext() {
     return Promise.resolve(true);
 }
 
-function playFallbackChime() {
+function playFallbackChime(options = {}) {
     const ctx = ensureAudioContext();
     if (!ctx) return Promise.resolve(false);
+    const quiet = Boolean(options.quiet);
+    const peakVolume = quiet ? 0.0001 : Math.max(0.08, Math.min(0.35, gongVolume * 0.35));
     return new Promise(resolve => {
         try {
             const oscillator = ctx.createOscillator();
             const gain = ctx.createGain();
-            gain.gain.value = 0.0001;
+            const now = ctx.currentTime;
             oscillator.type = 'triangle';
-            oscillator.frequency.value = 880;
+            oscillator.frequency.setValueAtTime(880, now);
+            oscillator.frequency.setValueAtTime(660, now + 0.16);
+            gain.gain.setValueAtTime(0.0001, now);
+            gain.gain.exponentialRampToValueAtTime(peakVolume, now + 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
             oscillator.connect(gain).connect(ctx.destination);
-            oscillator.start();
-            oscillator.stop(ctx.currentTime + 0.12);
+            oscillator.start(now);
+            oscillator.stop(now + 0.45);
             oscillator.onended = () => resolve(true);
             oscillator.onerror = () => resolve(false);
         } catch (err) {
@@ -692,7 +698,7 @@ function unlockAudio() {
         );
     }
     attempts.push(warmupAudioContext().catch(() => false));
-    attempts.push(playFallbackChime().catch(() => false));
+    attempts.push(playFallbackChime({quiet: true}).catch(() => false));
     Promise.all(attempts).then(results => {
         const success = results.some(Boolean);
         audioUnlocked = success;
@@ -847,12 +853,39 @@ function speak(text) {
     return Promise.resolve();
 }
 
+function waitForAlarmSoundReady() {
+    if (!alarmSound || alarmSound.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        return Promise.resolve();
+    }
+    if (typeof alarmSound.load === 'function') {
+        try {
+            alarmSound.load();
+        } catch (err) {
+            // Ignore load errors here; play() below still reports the actual failure.
+        }
+    }
+    return new Promise(resolve => {
+        const finish = () => {
+            window.clearTimeout(timeout);
+            alarmSound.removeEventListener('canplaythrough', finish);
+            alarmSound.removeEventListener('canplay', finish);
+            alarmSound.removeEventListener('loadeddata', finish);
+            alarmSound.removeEventListener('error', finish);
+            resolve();
+        };
+        const timeout = window.setTimeout(finish, 1200);
+        alarmSound.addEventListener('canplaythrough', finish, {once: true});
+        alarmSound.addEventListener('canplay', finish, {once: true});
+        alarmSound.addEventListener('loadeddata', finish, {once: true});
+        alarmSound.addEventListener('error', finish, {once: true});
+    });
+}
+
 function playGongOnce() {
     if (!audioPrefs.gong || !alarmSound) return Promise.resolve();
     if (!audioUnlocked) {
         updateAudioStatus();
         unlockAudio();
-        return Promise.resolve();
     }
     return new Promise(resolve => {
         let gongCompleted = false;
@@ -867,17 +900,28 @@ function playGongOnce() {
         const durationSeconds = Number.isFinite(alarmSound.duration) && alarmSound.duration > 0
             ? alarmSound.duration
             : 10;
-        const gongTimeout = window.setTimeout(finishGong, (durationSeconds * 1000) + 1000);
+        const gongTimeout = window.setTimeout(finishGong, (durationSeconds * 1000) + 1500);
         const finishWithTimeoutCleanup = () => finishGong();
         alarmSound.onended = finishWithTimeoutCleanup;
         alarmSound.onerror = finishWithTimeoutCleanup;
-        alarmSound.currentTime = 0;
-        alarmSound.play()
-            .catch(() => {
-                alarmSound.onended = null;
-                alarmSound.onerror = null;
-                playFallbackChime().finally(finishGong);
-            });
+        const startPlayback = (remainingRetries = 1) => {
+            waitForAlarmSoundReady()
+                .then(() => {
+                    alarmSound.pause();
+                    alarmSound.currentTime = 0;
+                    return alarmSound.play();
+                })
+                .catch(() => {
+                    if (remainingRetries > 0) {
+                        window.setTimeout(() => startPlayback(remainingRetries - 1), 200);
+                        return;
+                    }
+                    alarmSound.onended = null;
+                    alarmSound.onerror = null;
+                    playFallbackChime().finally(finishGong);
+                });
+        };
+        startPlayback();
     });
 }
 
