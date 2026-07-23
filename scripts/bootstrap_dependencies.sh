@@ -95,27 +95,41 @@ install_python_dependencies() {
   # shellcheck disable=SC1091
   source "$VENV_DIR/bin/activate"
   python -m pip install --upgrade pip setuptools wheel
-  python -m pip install Flask
 
-  local hardware_package
-  for hardware_package in RPi.GPIO spidev pigpio; do
-    if ! python -m pip install "$hardware_package"; then
-      echo "⚠️  $hardware_package konnte nicht per pip installiert werden; prüfe apt/system-site-packages." >&2
-    fi
-  done
+  if ! python -m pip install -r "$PROJECT_ROOT/requirements.txt"; then
+    echo "⚠️  requirements.txt konnte nicht in einem Lauf installiert werden; versuche Pakete einzeln." >&2
+    local requirement
+    while IFS= read -r requirement || [[ -n "$requirement" ]]; do
+      requirement="${requirement%%#*}"
+      requirement="$(xargs <<<"$requirement")"
+      if [[ -z "$requirement" ]]; then
+        continue
+      fi
+      if ! python -m pip install "$requirement"; then
+        echo "⚠️  $requirement konnte nicht per pip installiert werden; prüfe apt/system-site-packages." >&2
+      fi
+    done < "$PROJECT_ROOT/requirements.txt"
+  fi
 
   local missing
   missing=$(python - <<'PY_CHECK'
 import importlib.util
 
-print(' '.join(module for module in ('pigpio', 'spidev') if importlib.util.find_spec(module) is None))
+modules = {
+    'Flask': 'flask',
+    'RPi.GPIO': 'RPi.GPIO',
+    'spidev': 'spidev',
+    'pigpio': 'pigpio',
+}
+print(' '.join(requirement for requirement, module in modules.items() if importlib.util.find_spec(module) is None))
 PY_CHECK
 )
 
   if [[ -n "$missing" ]]; then
-    echo "⚠️  Pager-Hardware-Pythonpakete fehlen in der venv: $missing" >&2
+    echo "⚠️  Python-Pakete fehlen in der venv: $missing" >&2
     echo "    Auf Raspberry Pi OS bitte prüfen: sudo apt-get install -y pigpio python3-pigpio python3-spidev" >&2
-    echo "    Die Web-Oberfläche kann trotzdem starten; nur Pager-Senden benötigt diese Pakete." >&2
+    echo "    Die Web-Oberfläche benötigt Flask; Pager-Senden benötigt RPi.GPIO, pigpio und spidev." >&2
+    return 1
   fi
 }
 

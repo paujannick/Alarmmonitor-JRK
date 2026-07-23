@@ -16,7 +16,8 @@ source "$VENV_DIR/bin/activate"
 missing_pager_modules=$(python - <<'PY_CHECK'
 import importlib.util
 
-print(' '.join(module for module in ('pigpio', 'spidev') if importlib.util.find_spec(module) is None))
+modules = {'RPi.GPIO': 'RPi.GPIO', 'pigpio': 'pigpio', 'spidev': 'spidev'}
+print(' '.join(name for name, module in modules.items() if importlib.util.find_spec(module) is None))
 PY_CHECK
 )
 
