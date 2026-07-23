@@ -1261,7 +1261,8 @@ def api_alert_incident(inc_id):
             alerted = []
             skipped = []
             already = []
-            units = list(dict.fromkeys([*inc.get('vehicles', []), *requested_units]))
+            requested_units = list(dict.fromkeys(requested_units))
+            units = requested_units if requested_units else list(dict.fromkeys(inc.get('vehicles', [])))
             for unit in units:
                 # Skip vehicles that are already bound to another active incident
                 if any(

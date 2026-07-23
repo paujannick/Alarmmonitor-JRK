@@ -244,8 +244,43 @@ def test_alert_after_save_alarms_preassigned_vehicle_once():
 
 def test_monitor_registers_gong_end_before_playing_audio():
     monitor_template = Path('templates/monitor.html').read_text(encoding='utf-8')
-    enqueue_alarm = monitor_template[monitor_template.index('function enqueueAlarm'):monitor_template.index('function queueAnnouncement')]
-    play_index = enqueue_alarm.index('alarmSound.play()')
-    ended_index = enqueue_alarm.index('alarmSound.onended = finishWithTimeoutCleanup')
+    play_gong = monitor_template[monitor_template.index('function playGongOnce'):monitor_template.index('function rememberAnnouncementId')]
+    play_index = play_gong.index('alarmSound.play()')
+    ended_index = play_gong.index('alarmSound.onended = finishWithTimeoutCleanup')
     assert ended_index < play_index
     assert 'playFallbackChime().finally(finishGong)' in monitor_template
+
+
+def test_realert_requested_unit_only_when_incident_has_existing_vehicles():
+    app, client = setup_app()
+    app.vehicles['RTW1']['pager'] = 4
+    app.vehicles['KTW1']['pager'] = 5
+    enqueued = []
+    app.pager_service.enqueue = lambda pager, unit=None: enqueued.append((pager, unit)) or True
+
+    inc_id = client.post(
+        '/api/incidents',
+        json={'keyword': 'Test', 'location': 'Loc', 'vehicles': ['RTW1']},
+    ).get_json()['id']
+
+    response = client.post(f'/api/incidents/{inc_id}/alert', json={'units': ['KTW1']})
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data['alerted'] == ['KTW1']
+    assert data['already_alerted'] == []
+    assert app.vehicles['RTW1']['alarm_time'] is None
+    assert app.vehicles['KTW1']['alarm_time'] is not None
+    assert enqueued == [(5, 'KTW1')]
+
+
+def test_monitor_plays_gong_per_queued_alarm_and_times_out_speech():
+    monitor_template = Path('templates/monitor.html').read_text(encoding='utf-8')
+    enqueue_alarm = monitor_template[monitor_template.index('function enqueueAlarm'):monitor_template.index('function queueAnnouncement')]
+    process_queue = monitor_template[monitor_template.index('function processAlarmQueue'):monitor_template.index('function setLatestIncidentVisible')]
+    speak_function = monitor_template[monitor_template.index('function speak'):monitor_template.index('function rememberAnnouncementId')]
+
+    assert 'alarmQueue.push(Object.assign({playGong}, item))' in enqueue_alarm
+    assert 'playGongOnce()' in process_queue
+    assert 'synth.cancel();' in speak_function
+    assert 'window.setTimeout' in speak_function
