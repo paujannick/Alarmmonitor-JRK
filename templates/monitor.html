@@ -806,7 +806,26 @@ function speak(text) {
     if (!t || !audioPrefs.tts) return Promise.resolve();
     if ('speechSynthesis' in window && window.speechSynthesis) {
         return new Promise(resolve => {
+            const synth = window.speechSynthesis;
             const utterance = new SpeechSynthesisUtterance(t);
+            let settled = false;
+            const estimatedMs = Math.max(8000, Math.min(30000, t.length * 120));
+            const finish = () => {
+                if (settled) return;
+                settled = true;
+                window.clearTimeout(speechTimeout);
+                utterance.onend = null;
+                utterance.onerror = null;
+                resolve();
+            };
+            const speechTimeout = window.setTimeout(() => {
+                try {
+                    synth.cancel();
+                } catch (err) {
+                    console.warn('Sprachausgabe konnte nicht abgebrochen werden', err);
+                }
+                finish();
+            }, estimatedMs);
             selectedTtsVoice = selectedTtsVoice || chooseTtsVoice();
             if (selectedTtsVoice) {
                 utterance.voice = selectedTtsVoice;
@@ -814,14 +833,53 @@ function speak(text) {
             } else {
                 utterance.lang = 'de-DE';
             }
-            utterance.onend = resolve;
-            utterance.onerror = resolve;
-            window.speechSynthesis.speak(utterance);
+            utterance.onend = finish;
+            utterance.onerror = finish;
+            try {
+                synth.cancel();
+                synth.speak(utterance);
+            } catch (err) {
+                console.warn('Sprachausgabe fehlgeschlagen', err);
+                finish();
+            }
         });
     }
     return Promise.resolve();
 }
 
+function playGongOnce() {
+    if (!audioPrefs.gong || !alarmSound) return Promise.resolve();
+    if (!audioUnlocked) {
+        updateAudioStatus();
+        unlockAudio();
+        return Promise.resolve();
+    }
+    return new Promise(resolve => {
+        let gongCompleted = false;
+        const finishGong = () => {
+            if (gongCompleted) return;
+            gongCompleted = true;
+            window.clearTimeout(gongTimeout);
+            alarmSound.onended = null;
+            alarmSound.onerror = null;
+            resolve();
+        };
+        const durationSeconds = Number.isFinite(alarmSound.duration) && alarmSound.duration > 0
+            ? alarmSound.duration
+            : 10;
+        const gongTimeout = window.setTimeout(finishGong, (durationSeconds * 1000) + 1000);
+        const finishWithTimeoutCleanup = () => finishGong();
+        alarmSound.onended = finishWithTimeoutCleanup;
+        alarmSound.onerror = finishWithTimeoutCleanup;
+        alarmSound.currentTime = 0;
+        alarmSound.play()
+            .catch(() => {
+                alarmSound.onended = null;
+                alarmSound.onerror = null;
+                playFallbackChime().finally(finishGong);
+            });
+    });
+}
 
 function rememberAnnouncementId(id) {
     if (!id) return;
@@ -838,44 +896,9 @@ function rememberAnnouncementId(id) {
 
 function enqueueAlarm(item, options = {}) {
     const { playGong = true } = options;
-    alarmQueue.push(item);
-    if (alarmProcessing) return;
-    alarmProcessing = true;
-    const shouldPlayGong = Boolean(playGong && audioPrefs.gong && alarmSound);
-    if (!shouldPlayGong) {
-        processAlarmQueue();
-        return;
-    }
-    if (audioUnlocked) {
-        let gongCompleted = false;
-        const finishGong = () => {
-            if (gongCompleted) return;
-            gongCompleted = true;
-            alarmSound.onended = null;
-            alarmSound.onerror = null;
-            processAlarmQueue();
-        };
-        const durationSeconds = Number.isFinite(alarmSound.duration) && alarmSound.duration > 0
-            ? alarmSound.duration
-            : 10;
-        const gongTimeout = window.setTimeout(finishGong, (durationSeconds * 1000) + 1000);
-        const finishWithTimeoutCleanup = () => {
-            window.clearTimeout(gongTimeout);
-            finishGong();
-        };
-        alarmSound.onended = finishWithTimeoutCleanup;
-        alarmSound.onerror = finishWithTimeoutCleanup;
-        alarmSound.currentTime = 0;
-        alarmSound.play()
-            .catch(() => {
-                window.clearTimeout(gongTimeout);
-                alarmSound.onended = null;
-                alarmSound.onerror = null;
-                playFallbackChime().finally(finishGong);
-            });
-    } else {
-        updateAudioStatus();
-        unlockAudio();
+    alarmQueue.push(Object.assign({playGong}, item));
+    if (!alarmProcessing) {
+        alarmProcessing = true;
         processAlarmQueue();
     }
 }
@@ -975,7 +998,13 @@ function processAlarmQueue() {
     if (item.displayText) fragments.push(item.displayText);
     latestDiv.innerHTML = fragments.join(' ').trim();
     setLatestIncidentVisible(true);
-    speak(item.speechText).then(() => processAlarmQueue());
+    const shouldPlayGong = Boolean(item.playGong);
+    const playSequence = shouldPlayGong ? playGongOnce() : Promise.resolve();
+    playSequence
+        .catch(() => undefined)
+        .then(() => speak(item.speechText))
+        .catch(() => undefined)
+        .then(() => processAlarmQueue());
 }
 
 function setLatestIncidentVisible(visible) {
