@@ -847,16 +847,31 @@ function enqueueAlarm(item, options = {}) {
         return;
     }
     if (audioUnlocked) {
+        let gongCompleted = false;
+        const finishGong = () => {
+            if (gongCompleted) return;
+            gongCompleted = true;
+            alarmSound.onended = null;
+            alarmSound.onerror = null;
+            processAlarmQueue();
+        };
+        const durationSeconds = Number.isFinite(alarmSound.duration) && alarmSound.duration > 0
+            ? alarmSound.duration
+            : 10;
+        const gongTimeout = window.setTimeout(finishGong, (durationSeconds * 1000) + 1000);
+        const finishWithTimeoutCleanup = () => {
+            window.clearTimeout(gongTimeout);
+            finishGong();
+        };
+        alarmSound.onended = finishWithTimeoutCleanup;
+        alarmSound.onerror = finishWithTimeoutCleanup;
         alarmSound.currentTime = 0;
         alarmSound.play()
-            .then(() => {
-                alarmSound.onended = () => {
-                    alarmSound.onended = null;
-                    processAlarmQueue();
-                };
-            })
             .catch(() => {
-                playFallbackChime().finally(() => processAlarmQueue());
+                window.clearTimeout(gongTimeout);
+                alarmSound.onended = null;
+                alarmSound.onerror = null;
+                playFallbackChime().finally(finishGong);
             });
     } else {
         updateAudioStatus();
