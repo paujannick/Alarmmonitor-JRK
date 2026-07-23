@@ -13,33 +13,17 @@ fi
 # shellcheck disable=SC1091
 source "$VENV_DIR/bin/activate"
 
-missing_pager_modules() {
-  python - <<'PY_CHECK'
+missing_pager_modules=$(python - <<'PY_CHECK'
 import importlib.util
-import sys
 
-missing = [module for module in ("pigpio", "spidev") if importlib.util.find_spec(module) is None]
-if missing:
-    print(" ".join(missing))
-    sys.exit(1)
+print(' '.join(module for module in ('pigpio', 'spidev') if importlib.util.find_spec(module) is None))
 PY_CHECK
-}
+)
 
-if missing=$(missing_pager_modules); then
-  :
-else
-  echo "Pager-Hardware-Abhängigkeiten fehlen in der venv: $missing" >&2
-  echo "Starte automatische Nachinstallation über ./install.sh ..." >&2
-  ./install.sh
-  # shellcheck disable=SC1091
-  source "$VENV_DIR/bin/activate"
-  if missing=$(missing_pager_modules); then
-    :
-  else
-    echo "Pager-Hardware-Abhängigkeiten fehlen weiterhin: $missing" >&2
-    echo "Bitte auf dem Raspberry Pi ausführen: sudo apt-get install -y pigpio python3-pigpio python3-spidev && ./install.sh" >&2
-    exit 1
-  fi
+if [[ -n "$missing_pager_modules" ]]; then
+  echo "⚠️  Pager-Hardware-Abhängigkeiten fehlen in der venv: $missing_pager_modules" >&2
+  echo "    Die Web-Oberfläche startet trotzdem; Pager-Senden benötigt diese Pakete." >&2
+  echo "    Auf Raspberry Pi OS ausführen: sudo apt-get install -y pigpio python3-pigpio python3-spidev && ./install.sh" >&2
 fi
 
 export FLASK_APP=app.py
