@@ -27,6 +27,19 @@ apt_update_once() {
   fi
 }
 
+systemd_unit_exists() {
+  local unit_name="$1"
+  systemctl list-unit-files "$unit_name" --no-legend 2>/dev/null | awk '{print $1}' | grep -Fxq "$unit_name"
+}
+
+apt_package_has_candidate() {
+  local package="$1"
+  local candidate
+
+  candidate=$(apt-cache policy "$package" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+  [[ -n "$candidate" && "$candidate" != "(none)" ]]
+}
+
 install_apt_package_group() {
   local description="$1"
   shift
@@ -38,12 +51,87 @@ install_apt_package_group() {
 
   echo "📦 Installiere $description"
   apt_update_once
-  if run_root apt-get install -y "$@"; then
+
+  local failed=0
+  local package
+  for package in "$@"; do
+    if ! apt_package_has_candidate "$package"; then
+      echo "⚠️  apt-Paket $package ist in den aktiven Paketquellen nicht verfügbar; überspringe." >&2
+      failed=1
+      continue
+    fi
+
+    if ! run_root apt-get install -y "$package"; then
+      echo "⚠️  apt-Paket $package konnte nicht installiert werden; fahre fort." >&2
+      failed=1
+    fi
+  done
+
+  return "$failed"
+}
+
+install_pigpio_from_source_if_missing() {
+  if command -v pigpiod >/dev/null 2>&1; then
     return 0
   fi
 
-  echo "⚠️  $description konnte nicht vollständig per apt installiert werden; fahre fort." >&2
-  return 1
+  if ! command -v git >/dev/null 2>&1 || ! command -v make >/dev/null 2>&1 || ! command -v gcc >/dev/null 2>&1; then
+    install_apt_package_group "Build-Abhängigkeiten für pigpio" \
+      git \
+      make \
+      gcc || true
+  fi
+
+  if ! command -v git >/dev/null 2>&1 || ! command -v make >/dev/null 2>&1 || ! command -v gcc >/dev/null 2>&1; then
+    echo "⚠️  pigpio kann nicht aus dem Quellcode gebaut werden; git, make oder gcc fehlen." >&2
+    return 1
+  fi
+
+  echo "📡 pigpio ist per apt nicht verfügbar; baue und installiere pigpio aus dem Quellcode"
+
+  local build_dir
+  build_dir=$(mktemp -d)
+  trap 'rm -rf "$build_dir"' RETURN
+  (
+    cd "$build_dir"
+    git clone --depth 1 https://github.com/joan2937/pigpio.git
+    cd pigpio
+    run_root killall pigpiod >/dev/null 2>&1 || true
+    make
+    run_root make install
+  )
+
+  install_pigpiod_service_if_missing
+}
+
+install_pigpiod_service_if_missing() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if systemd_unit_exists pigpiod.service; then
+    return 0
+  fi
+
+  if [[ ! -x /usr/local/bin/pigpiod ]]; then
+    return 0
+  fi
+
+  echo "📡 Lege pigpiod.service für aus Quellcode installiertes pigpio an"
+  run_root tee /etc/systemd/system/pigpiod.service >/dev/null <<'SERVICE'
+[Unit]
+Description=Daemon required to control GPIO pins via pigpio
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/pigpiod
+ExecStop=/bin/systemctl kill -s SIGKILL pigpiod
+Type=forking
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+  run_root systemctl daemon-reload
 }
 
 install_apt_dependencies() {
@@ -55,12 +143,14 @@ install_apt_dependencies() {
     network-manager || true
 
   # Hardware-Pakete sind auf Raspberry Pi OS per apt verfügbar, aber nicht auf
-  # allen Debian/Ubuntu-Varianten. Ein Fehlschlag darf die Web-App-Installation
-  # nicht abbrechen; pip bzw. die Laufzeitprüfung übernehmen den Fallback.
+  # allen Debian/Ubuntu-Varianten. Wenn pigpio/pigpiod nicht per apt verfügbar
+  # ist, wird es danach aus dem Quellcode gebaut, damit Pager-Senden funktioniert.
   install_apt_package_group "Pager-Hardware-Abhängigkeiten" \
     pigpio \
     python3-pigpio \
     python3-spidev || true
+
+  install_pigpio_from_source_if_missing || true
 }
 
 enable_spi_if_available() {
@@ -75,7 +165,7 @@ ensure_pigpiod_started() {
     return
   fi
 
-  if systemctl list-unit-files pigpiod.service >/dev/null 2>&1; then
+  if systemd_unit_exists pigpiod.service; then
     echo "📡 Aktiviere und starte pigpiod"
     run_root systemctl enable --now pigpiod.service
   fi
@@ -138,7 +228,7 @@ restart_alarmmonitor_if_installed() {
     return
   fi
 
-  if systemctl list-unit-files "$SERVICE_NAME" >/dev/null 2>&1; then
+  if systemd_unit_exists "$SERVICE_NAME"; then
     echo "🚀 Aktiviere und starte/restartet $SERVICE_NAME"
     run_root systemctl daemon-reload
     run_root systemctl enable "$SERVICE_NAME"
