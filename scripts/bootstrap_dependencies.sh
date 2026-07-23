@@ -58,11 +58,31 @@ ensure_pigpiod_started() {
 
 install_python_dependencies() {
   echo "🐍 Installiere Python-Abhängigkeiten"
-  python3 -m venv "$VENV_DIR"
+  python3 -m venv --system-site-packages "$VENV_DIR"
+
+  # Bestehende venvs wurden ggf. ohne Zugriff auf apt-Pakete wie
+  # python3-pigpio erstellt. Aktiviere system-site-packages nachträglich,
+  # damit der Pagerdienst pigpio/spidev auf Raspberry Pi zuverlässig findet.
+  if [[ -f "$VENV_DIR/pyvenv.cfg" ]] && grep -q "^include-system-site-packages = false" "$VENV_DIR/pyvenv.cfg"; then
+    sed -i "s/^include-system-site-packages = false/include-system-site-packages = true/" "$VENV_DIR/pyvenv.cfg"
+  fi
+
   # shellcheck disable=SC1091
   source "$VENV_DIR/bin/activate"
   python -m pip install --upgrade pip setuptools wheel
   python -m pip install -r "$PROJECT_ROOT/requirements.txt"
+  python - <<'PY_CHECK'
+import importlib.util
+import sys
+
+missing = [module for module in ('pigpio', 'spidev') if importlib.util.find_spec(module) is None]
+if missing:
+    sys.exit(
+        'Folgende Pager-Hardware-Pythonpakete fehlen in der venv: '
+        + ', '.join(missing)
+        + '. Bitte ./install.sh erneut auf dem Raspberry Pi ausführen.'
+    )
+PY_CHECK
 }
 
 restart_alarmmonitor_if_installed() {
