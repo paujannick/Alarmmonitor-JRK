@@ -126,6 +126,61 @@
     </section>
   </div>
 
+
+
+  <div class="col-12 col-xl-6">
+    <section class="card card-panel h-100">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <h2 class="h5 mb-1">Netzwerk &amp; Router</h2>
+          <p class="text-body-secondary small mb-0">Dokumentiert den Routerzugang für die lokale Alarmmonitor-Installation.</p>
+        </div>
+        {% if network.admin_url %}<a id="network-open-button" href="{{ network.admin_url }}" target="_blank" rel="noopener" class="btn btn-outline-warning btn-sm">Router öffnen</a>{% endif %}
+      </div>
+      <div class="card-body">
+        <form id="network-settings-form" class="row g-3" autocomplete="off">
+          <div class="col-md-6">
+            <label class="form-label" for="network-router-name">Router-Name</label>
+            <input type="text" id="network-router-name" name="router_name" class="form-control" value="{{ network.router_name or '' }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="network-admin-url">Admin-URL</label>
+            <input type="text" id="network-admin-url" name="admin_url" class="form-control" value="{{ network.admin_url or '' }}" placeholder="http://tplinkwifi.net">
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="network-notes">Notizen</label>
+            <textarea id="network-notes" name="notes" class="form-control" rows="3">{{ network.notes or '' }}</textarea>
+          </div>
+          <div class="col-12 d-flex flex-wrap gap-2 align-items-center">
+            <button type="submit" class="btn btn-primary">Netzwerk speichern</button>
+            <div id="network-settings-feedback" class="alert d-none mb-0 flex-grow-1" role="alert"></div>
+          </div>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <div class="col-12 col-xl-6">
+    <section class="card card-panel h-100">
+      <div class="card-header">
+        <h2 class="h5 mb-1">Pager &amp; Sendeleistung</h2>
+        <p class="text-body-secondary small mb-0">Konfiguriert GPIO/SPI, Wiederholungen und CC1101-Sendeleistung.</p>
+      </div>
+      <div class="card-body">
+        {% set pager = app_settings.pager or {} %}
+        <form id="pager-settings-form" class="row g-3" autocomplete="off">
+          <div class="col-sm-4"><label class="form-label" for="pager-gpio">GPIO</label><input type="number" id="pager-gpio" name="gpio" class="form-control" min="0" max="31" value="{{ pager.gpio }}"></div>
+          <div class="col-sm-4"><label class="form-label" for="pager-spi-bus">SPI-Bus</label><input type="number" id="pager-spi-bus" name="spi_bus" class="form-control" min="0" max="3" value="{{ pager.spi_bus }}"></div>
+          <div class="col-sm-4"><label class="form-label" for="pager-spi-device">SPI-Gerät</label><input type="number" id="pager-spi-device" name="spi_device" class="form-control" min="0" max="3" value="{{ pager.spi_device }}"></div>
+          <div class="col-sm-6"><label class="form-label" for="pager-repeats">Wiederholungen</label><input type="number" id="pager-repeats" name="repeats" class="form-control" min="1" max="30" value="{{ pager.repeats }}"></div>
+          <div class="col-sm-6"><label class="form-label" for="pager-power">Sendeleistung (PATABLE)</label><input type="text" id="pager-power" name="power" class="form-control" value="0x{{ '%02x'|format(pager.power) }}" placeholder="0x60"><div class="form-text">Hex (z. B. 0x60) oder Dezimalwert 0–255.</div></div>
+          <div class="col-12"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="pager-inverted" name="inverted" {% if pager.inverted %}checked{% endif %}><label class="form-check-label" for="pager-inverted">Signal invertiert</label></div></div>
+          <div class="col-12 d-flex flex-wrap gap-2 align-items-center"><button type="submit" class="btn btn-primary">Pager-Einstellungen speichern</button><div id="pager-settings-feedback" class="alert d-none mb-0 flex-grow-1" role="alert"></div></div>
+        </form>
+      </div>
+    </section>
+  </div>
+
   <div class="col-12 col-xl-6">
     <section class="card card-panel h-100">
       <div class="card-header">
@@ -573,5 +628,114 @@ if (networkForm) {
     }
   });
 }
+const pagerForm = document.getElementById('pager-settings-form');
+if (pagerForm) {
+  const feedback = document.getElementById('pager-settings-feedback');
+  pagerForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const formData = new FormData(pagerForm);
+    const payload = Object.fromEntries(formData.entries());
+    payload.inverted = Boolean(document.getElementById('pager-inverted')?.checked);
+    try {
+      const response = await fetch('/api/settings/pager', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) {
+        throw new Error((data && data.error) || 'Pager-Einstellungen konnten nicht gespeichert werden.');
+      }
+      showFeedback(feedback, 'Pager-Einstellungen gespeichert.');
+      if (data.pager) {
+        ['gpio', 'spi_bus', 'spi_device', 'repeats'].forEach(key => {
+          const input = pagerForm.elements[key];
+          if (input) input.value = data.pager[key];
+        });
+        if (pagerForm.elements.power) pagerForm.elements.power.value = `0x${Number(data.pager.power).toString(16).padStart(2, '0')}`;
+        const inverted = document.getElementById('pager-inverted');
+        if (inverted) inverted.checked = Boolean(data.pager.inverted);
+      }
+    } catch (err) {
+      showFeedback(feedback, err.message || 'Pager-Einstellungen konnten nicht gespeichert werden.', 'danger');
+    }
+  });
+}
+
+function bindVehicleFieldButtons(tableId, buttonClass, fieldClass, fieldName, successMessage) {
+  document.querySelectorAll(`#${tableId} .${buttonClass}`).forEach(button => {
+    button.addEventListener('click', async event => {
+      event.preventDefault();
+      const row = button.closest('tr');
+      const unit = row?.dataset.unit;
+      const input = row?.querySelector(`.${fieldClass}`);
+      if (!unit || !input) return;
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/vehicles/${encodeURIComponent(unit)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [fieldName]: input.value }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error((data && data.error) || 'Speichern fehlgeschlagen.');
+        button.textContent = 'Gespeichert';
+        window.setTimeout(() => { button.textContent = 'Speichern'; }, 1500);
+      } catch (err) {
+        alert(err.message || successMessage || 'Speichern fehlgeschlagen.');
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+}
+bindVehicleFieldButtons('base-table', 'save-base', 'base', 'base');
+bindVehicleFieldButtons('tts-table', 'save', 'tts', 'tts');
+
+const templateAddForm = document.getElementById('template-add');
+if (templateAddForm) {
+  templateAddForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const payload = Object.fromEntries(new FormData(templateAddForm).entries());
+    const response = await fetch('/api/templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    if (response.ok) window.location.reload(); else alert('Vorlage konnte nicht gespeichert werden.');
+  });
+}
+
+document.querySelectorAll('#template-table .save-template').forEach(button => {
+  button.addEventListener('click', async event => {
+    event.preventDefault();
+    const row = button.closest('tr');
+    const payload = { id: row.dataset.id, label: row.querySelector('.label').value, keyword: row.querySelector('.keyword').value, priority: row.querySelector('.priority').value };
+    const response = await fetch('/api/templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    if (response.ok) { button.textContent = 'Gespeichert'; setTimeout(() => { button.textContent = 'Speichern'; }, 1500); } else alert('Vorlage konnte nicht gespeichert werden.');
+  });
+});
+
+document.querySelectorAll('#template-table .delete-template').forEach(button => {
+  button.addEventListener('click', async event => {
+    event.preventDefault();
+    const row = button.closest('tr');
+    if (!row?.dataset.id || !confirm('Vorlage wirklich löschen?')) return;
+    const response = await fetch(`/api/templates/${encodeURIComponent(row.dataset.id)}`, { method: 'DELETE' });
+    if (response.ok) row.remove(); else alert('Vorlage konnte nicht gelöscht werden.');
+  });
+});
+
+const priorityForm = document.getElementById('priority-form');
+const priorityTableBody = document.querySelector('#priority-table tbody');
+document.getElementById('priority-add')?.addEventListener('click', () => {
+  priorityTableBody?.insertAdjacentHTML('beforeend', '<tr><td><input type="text" class="form-control form-control-sm priority-value" value=""></td><td class="text-end"><button type="button" class="btn btn-sm btn-danger priority-delete">Löschen</button></td></tr>');
+});
+priorityTableBody?.addEventListener('click', event => {
+  if (event.target.closest('.priority-delete')) event.target.closest('tr')?.remove();
+});
+priorityForm?.addEventListener('submit', async event => {
+  event.preventDefault();
+  const priorities = Array.from(priorityForm.querySelectorAll('.priority-value')).map(input => input.value);
+  const response = await fetch('/api/priorities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ priorities }) });
+  if (response.ok) window.location.reload(); else alert('Prioritäten konnten nicht gespeichert werden.');
+});
+
 </script>
 {% endblock %}

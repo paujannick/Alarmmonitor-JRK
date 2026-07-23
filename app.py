@@ -1607,6 +1607,51 @@ def api_upload_monitor_gong():
 
     return jsonify({'ok': True, 'gong_sound_url': resolve_gong_sound_url(), 'gong_sound': monitor_settings['gong_sound']})
 
+def _parse_int_setting(value, *, minimum, maximum, name):
+    try:
+        numeric = int(str(value).strip(), 0)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f'{name} muss eine Zahl sein.') from exc
+    if numeric < minimum or numeric > maximum:
+        raise ValueError(f'{name} muss zwischen {minimum} und {maximum} liegen.')
+    return numeric
+
+
+@app.route('/api/settings/pager', methods=['PUT'])
+def api_update_pager_settings():
+    data = request.get_json(silent=True) or {}
+    pager_settings = dict(settings.get('pager') or {})
+    try:
+        if 'gpio' in data:
+            pager_settings['gpio'] = _parse_int_setting(data.get('gpio'), minimum=0, maximum=31, name='GPIO')
+        if 'spi_bus' in data:
+            pager_settings['spi_bus'] = _parse_int_setting(data.get('spi_bus'), minimum=0, maximum=3, name='SPI-Bus')
+        if 'spi_device' in data:
+            pager_settings['spi_device'] = _parse_int_setting(data.get('spi_device'), minimum=0, maximum=3, name='SPI-Gerät')
+        if 'power' in data:
+            pager_settings['power'] = _parse_int_setting(data.get('power'), minimum=0, maximum=255, name='Sendeleistung')
+        if 'repeats' in data:
+            pager_settings['repeats'] = _parse_int_setting(data.get('repeats'), minimum=1, maximum=30, name='Wiederholungen')
+        if 'inverted' in data:
+            pager_settings['inverted'] = parse_bool(data.get('inverted'), pager_settings.get('inverted', True))
+    except ValueError as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+    pager_settings['enabled'] = True
+    settings['pager'] = pager_settings
+    save_settings()
+
+    global pager_service
+    old_service = pager_service
+    pager_service = PagerService(PagerConfig.from_settings(settings), app.logger)
+    pager_service.start()
+    try:
+        old_service.stop()
+    except Exception as exc:
+        app.logger.warning('Alter Pagerdienst konnte nach Konfigurationswechsel nicht sauber beendet werden: %s', exc)
+
+    return jsonify({'ok': True, 'pager': pager_settings})
+
+
 @app.route('/api/settings/network', methods=['PUT'])
 def api_update_network_settings():
     data = request.json or {}
