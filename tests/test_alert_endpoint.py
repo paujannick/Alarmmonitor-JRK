@@ -284,3 +284,73 @@ def test_monitor_plays_gong_per_queued_alarm_and_times_out_speech():
     assert 'playGongOnce()' in process_queue
     assert 'synth.cancel();' in speak_function
     assert 'window.setTimeout' in speak_function
+
+
+def test_create_incident_with_selected_vehicle_does_not_alert_on_save():
+    app, client = setup_app()
+    app.vehicles['RTW1']['pager'] = 4
+    enqueued = []
+    app.pager_service.enqueue = lambda pager, unit=None: enqueued.append((pager, unit)) or True
+
+    response = client.post(
+        '/api/incidents',
+        json={'keyword': 'Test', 'location': 'Loc', 'vehicles': ['RTW1']},
+    )
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data['ok']
+    assert app.vehicles['RTW1']['incident_id'] == data['id']
+    assert app.vehicles['RTW1']['alarm_time'] is None
+    assert enqueued == []
+
+
+def test_update_incident_vehicle_selection_does_not_alert_on_save():
+    app, client = setup_app()
+    app.vehicles['KTW1']['pager'] = 5
+    enqueued = []
+    app.pager_service.enqueue = lambda pager, unit=None: enqueued.append((pager, unit)) or True
+
+    inc_id = client.post(
+        '/api/incidents',
+        json={'keyword': 'Test', 'location': 'Loc', 'vehicles': ['RTW1']},
+    ).get_json()['id']
+
+    response = client.put(
+        f'/api/incidents/{inc_id}',
+        json={'vehicles': ['RTW1', 'KTW1']},
+    )
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data['ok']
+    assert app.vehicles['KTW1']['incident_id'] == inc_id
+    assert app.vehicles['KTW1']['alarm_time'] is None
+    assert enqueued == []
+
+
+def test_realert_after_status_clear_uses_incident_log_not_alarm_time():
+    app, client = setup_app()
+    app.vehicles['RTW1']['pager'] = 4
+    enqueued = []
+    app.pager_service.enqueue = lambda pager, unit=None: enqueued.append((pager, unit)) or True
+
+    inc_id = client.post(
+        '/api/incidents',
+        json={'keyword': 'Test', 'location': 'Loc', 'vehicles': ['RTW1']},
+    ).get_json()['id']
+    client.post(f'/api/incidents/{inc_id}/alert', json={'units': ['RTW1']})
+    assert enqueued == [(4, 'RTW1')]
+
+    # Simulate a vehicle becoming free while the incident history still records
+    # that it was already alarmed for this incident.
+    app.vehicles['RTW1']['incident_id'] = None
+    app.vehicles['RTW1']['alarm_time'] = None
+
+    response = client.post(f'/api/incidents/{inc_id}/alert', json={'units': ['RTW1']})
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data['alerted'] == []
+    assert data['already_alerted'] == ['RTW1']
+    assert enqueued == [(4, 'RTW1')]

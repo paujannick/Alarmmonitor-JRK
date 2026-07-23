@@ -1358,12 +1358,13 @@ if (incidentEndBtn) {
 }
 
 // Handle the "Alarmieren" button inside the incident modal
-// This creates or updates the incident and then alerts all selected vehicles
+// This creates or updates the incident and then alerts selected vehicles that are not yet alarmed
 document.getElementById('incident-alert').addEventListener('click', async () => {
   const f = document.getElementById('incident-form');
   const alertBtn = document.getElementById('incident-alert');
   let id = f.elements['id'].value; // Existing incident id (empty when creating)
-  const units = Array.from(f.querySelectorAll('input[name="vehicles"]:checked')).map(cb => cb.value);
+  const selectedUnits = Array.from(f.querySelectorAll('input[name="vehicles"]:checked')).map(cb => cb.value);
+  const units = selectedUnits.filter(unit => !(vehiclesData[unit] && vehiclesData[unit].alarm_time));
 
   // Gather incident details from the form
   const details = {
@@ -1371,12 +1372,12 @@ document.getElementById('incident-alert').addEventListener('click', async () => 
     location: f.location.value,
     priority: f.priority.value,
     patient: f.patient.value,
-    vehicles: units
+    vehicles: selectedUnits
   };
   const note = f.note.value.trim();
   if (note) details.note = note;
 
-  if (!units.length) {
+  if (!selectedUnits.length) {
     incidentError.textContent = 'Bitte mindestens ein Fahrzeug auswählen.';
     incidentError.classList.remove('d-none');
     return;
@@ -1413,6 +1414,17 @@ document.getElementById('incident-alert').addEventListener('click', async () => 
       }
       id = r.id;
       f.elements['id'].value = id;
+    }
+
+    if (!units.length) {
+      success = true;
+      incidentModal.hide();
+      try {
+        await refreshVehicles();
+      } catch (err) {
+        console.error(err);
+      }
+      return;
     }
 
     const alertRes = await fetch(`/api/incidents/${id}/alert`, {
