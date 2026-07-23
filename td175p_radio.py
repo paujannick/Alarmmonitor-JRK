@@ -557,6 +557,8 @@ def _main() -> int:
     )
     parser.add_argument("pager", type=int)
     parser.add_argument("--gpio", type=int, default=24)
+    parser.add_argument("--spi-bus", type=int, default=0)
+    parser.add_argument("--spi-device", type=int, default=0)
     parser.add_argument("--power", type=lambda value: int(value, 0), default=0x60)
     parser.add_argument("--repeats", type=int, default=30)
     parser.add_argument("--yes", action="store_true")
@@ -574,7 +576,12 @@ def _main() -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     sender = TD175PSender(
-        config=TD175PConfig(gpio=args.gpio, power=args.power),
+        config=TD175PConfig(
+            gpio=args.gpio,
+            spi_bus=args.spi_bus,
+            spi_device=args.spi_device,
+            power=args.power,
+        ),
         timing=TD175PTiming(repeats=args.repeats),
     )
     try:

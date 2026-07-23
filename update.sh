@@ -1,11 +1,7 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+cd "$SCRIPT_DIR"
 
 git pull --ff-only
-
-if [ -d "venv" ]; then
-  source venv/bin/activate
-  pip install --upgrade -r requirements.txt
-else
-  echo "Virtual environment not found. Run ./install.sh first."
-fi
+./scripts/bootstrap_dependencies.sh
