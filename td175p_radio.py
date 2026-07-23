@@ -128,7 +128,7 @@ class TD175PConfig:
     spi_bus: int = 0
     spi_device: int = 0
     spi_speed_hz: int = 4_000_000
-    power: int = 0x60
+    power: int = 0xC0
     tx_timeout_s: float = 2.0
     pigpio_host: str | None = None
     pigpio_port: int | None = None
