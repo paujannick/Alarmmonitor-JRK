@@ -31,3 +31,29 @@ def test_start_warns_for_every_pager_hardware_import():
         'spidev': 'spidev',
     }.items():
         assert f"'{requirement}': '{module}'" in script
+
+
+def test_bootstrap_skips_apt_packages_without_installation_candidate():
+    script = (PROJECT_ROOT / 'scripts' / 'bootstrap_dependencies.sh').read_text()
+    assert 'apt_package_has_candidate()' in script
+    assert 'apt-cache policy "$package"' in script
+    assert 'apt-Paket $package ist in den aktiven Paketquellen nicht verfügbar; überspringe.' in script
+    assert 'run_root apt-get install -y "$package"' in script
+
+
+def test_bootstrap_builds_pigpio_from_source_when_daemon_is_missing():
+    script = (PROJECT_ROOT / 'scripts' / 'bootstrap_dependencies.sh').read_text()
+    assert 'install_pigpio_from_source_if_missing()' in script
+    assert 'command -v pigpiod' in script
+    assert 'trap \'rm -rf "$build_dir"\' RETURN' in script
+    assert 'git clone --depth 1 https://github.com/joan2937/pigpio.git' in script
+    assert 'run_root make install' in script
+    assert 'install_pigpiod_service_if_missing' in script
+
+
+def test_bootstrap_checks_systemd_units_by_exact_name():
+    script = (PROJECT_ROOT / 'scripts' / 'bootstrap_dependencies.sh').read_text()
+    assert 'systemd_unit_exists()' in script
+    assert 'grep -Fxq "$unit_name"' in script
+    assert 'systemd_unit_exists pigpiod.service' in script
+    assert 'systemd_unit_exists "$SERVICE_NAME"' in script
