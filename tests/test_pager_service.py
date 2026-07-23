@@ -187,3 +187,22 @@ def test_sender_script_receives_configured_cli_options(monkeypatch):
 
 def test_pager_default_power_matches_sender_script_default():
     assert PagerConfig().power == 0x60
+
+
+def test_pager_special_power_off_command_is_valid():
+    assert pager_bcd(999) == 0x99
+    assert pager_payload(999) == bytes([0x99, 0x09, 0x92, 0x02])
+
+
+def test_power_off_endpoint_enqueues_special_pager():
+    app, client = setup_app()
+    enqueued = []
+    app.pager_service.enqueue = lambda pager, unit=None: enqueued.append((pager, unit)) or True
+
+    response = client.post('/api/pager/power-off')
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data['ok'] is True
+    assert data['pager'] == 999
+    assert enqueued == [(999, 'Pager ausschalten')]

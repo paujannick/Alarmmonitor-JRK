@@ -392,7 +392,7 @@ def normalise_pager_number(value):
     try:
         pager = int(value)
     except (TypeError, ValueError):
-        raise ValueError('Pagernummer muss zwischen 1 und 30 liegen.')
+        raise ValueError('Erlaubt sind Pagernummern 1 bis 30 oder 999 zum Ausschalten.')
     pager_payload(pager)
     return pager
 
@@ -1001,6 +1001,17 @@ def api_test_vehicle_pager(unit):
     return jsonify({'ok': True, 'queued': True})
 
 
+@app.route('/api/pager/power-off', methods=['POST'])
+def api_power_off_pagers():
+    """Send the TD175P special command that switches pagers off."""
+
+    try:
+        enqueued = pager_service.enqueue(999, 'Pager ausschalten')
+    except ValueError as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+    return jsonify({'ok': True, 'queued': enqueued, 'pager': 999})
+
+
 @app.route('/api/vehicles/<unit>/icon', methods=['POST'])
 def api_upload_icon(unit):
     if unit not in vehicles:
@@ -1243,13 +1254,14 @@ def api_alert_incident(inc_id):
     to another active incident.
     """
     data = request.json or {}
-    units = data.get('units', [])
+    requested_units = data.get('units', [])
     for inc in incidents:
         if inc['id'] == inc_id and inc.get('active'):
             inc = normalise_incident(inc)
             alerted = []
             skipped = []
             already = []
+            units = list(dict.fromkeys([*inc.get('vehicles', []), *requested_units]))
             for unit in units:
                 # Skip vehicles that are already bound to another active incident
                 if any(
@@ -1265,6 +1277,7 @@ def api_alert_incident(inc_id):
                     already_assigned
                     and info is not None
                     and info.get('incident_id') == inc_id
+                    and info.get('alarm_time')
                 )
                 if already_active:
                     already.append(unit)

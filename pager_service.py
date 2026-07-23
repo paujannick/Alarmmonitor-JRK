@@ -24,8 +24,6 @@ def pager_bcd(pager: int) -> int:
     """Return the low BCD address byte for the supported vehicle pagers."""
 
     validate_pager_command(pager)
-    if pager == 999:
-        raise ValueError('Pagernummer muss zwischen 1 und 30 liegen.')
     return payload_for(pager)[0]
 
 
