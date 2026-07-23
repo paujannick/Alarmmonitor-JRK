@@ -71,6 +71,13 @@ install_python_dependencies() {
   source "$VENV_DIR/bin/activate"
   python -m pip install --upgrade pip setuptools wheel
   python -m pip install -r "$PROJECT_ROOT/requirements.txt"
+  python - <<'PY_INSTALL' || python -m pip install pigpio spidev
+import importlib.util
+import sys
+
+missing = [module for module in ('pigpio', 'spidev') if importlib.util.find_spec(module) is None]
+sys.exit(1 if missing else 0)
+PY_INSTALL
   python - <<'PY_CHECK'
 import importlib.util
 import sys
@@ -80,7 +87,8 @@ if missing:
     sys.exit(
         'Folgende Pager-Hardware-Pythonpakete fehlen in der venv: '
         + ', '.join(missing)
-        + '. Bitte ./install.sh erneut auf dem Raspberry Pi ausführen.'
+        + '. Bitte auf dem Raspberry Pi ausführen: '
+        + 'sudo apt-get install -y pigpio python3-pigpio python3-spidev && ./install.sh'
     )
 PY_CHECK
 }
