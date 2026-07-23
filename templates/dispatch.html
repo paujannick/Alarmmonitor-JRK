@@ -1364,7 +1364,7 @@ document.getElementById('incident-alert').addEventListener('click', async () => 
   const alertBtn = document.getElementById('incident-alert');
   let id = f.elements['id'].value; // Existing incident id (empty when creating)
   const selectedUnits = Array.from(f.querySelectorAll('input[name="vehicles"]:checked')).map(cb => cb.value);
-  const units = selectedUnits.filter(unit => !(vehiclesData[unit] && vehiclesData[unit].alarm_time));
+  const units = selectedUnits;
 
   // Gather incident details from the form
   const details = {

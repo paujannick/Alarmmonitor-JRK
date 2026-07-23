@@ -274,16 +274,28 @@ def test_realert_requested_unit_only_when_incident_has_existing_vehicles():
     assert enqueued == [(5, 'KTW1')]
 
 
-def test_monitor_plays_gong_per_queued_alarm_and_times_out_speech():
+def test_monitor_groups_new_vehicle_alarms_and_times_out_speech():
     monitor_template = Path('templates/monitor.html').read_text(encoding='utf-8')
     enqueue_alarm = monitor_template[monitor_template.index('function enqueueAlarm'):monitor_template.index('function queueAnnouncement')]
     process_queue = monitor_template[monitor_template.index('function processAlarmQueue'):monitor_template.index('function setLatestIncidentVisible')]
+    refresh_function = monitor_template[monitor_template.index('async function refresh'):monitor_template.index('setInterval(() =>')]
     speak_function = monitor_template[monitor_template.index('function speak'):monitor_template.index('function rememberAnnouncementId')]
 
     assert 'alarmQueue.push(Object.assign({playGong}, item))' in enqueue_alarm
     assert 'playGongOnce()' in process_queue
+    assert 'const pendingAlarms = [];' in refresh_function
+    assert 'pendingAlarms.push({unit, info, alarmId});' in refresh_function
+    assert 'triggerAlarmGroup(pendingAlarms);' in refresh_function
     assert 'synth.cancel();' in speak_function
     assert 'window.setTimeout' in speak_function
+
+
+def test_monitor_alarms_only_with_explicit_alarm_time():
+    monitor_template = Path('templates/monitor.html').read_text(encoding='utf-8')
+    compute_alarm_id = monitor_template[monitor_template.index('function computeAlarmId'):monitor_template.index('function renderActiveIncidents')]
+
+    assert 'if (!info || !info.alarm_time) return null;' in compute_alarm_id
+    assert 'info.alarm_time || info.incident_id' not in compute_alarm_id
 
 
 def test_create_incident_with_selected_vehicle_does_not_alert_on_save():
