@@ -206,3 +206,44 @@ def test_power_off_endpoint_enqueues_special_pager():
     assert data['ok'] is True
     assert data['pager'] == 999
     assert enqueued == [(999, 'Pager ausschalten')]
+
+
+def test_pager_settings_endpoint_updates_power_and_runtime_config():
+    app, client = setup_app()
+    app.settings = app.load_settings()
+    stopped = []
+
+    class DummyPagerService:
+        def stop(self):
+            stopped.append(True)
+
+    app.pager_service = DummyPagerService()
+    app.save_settings = lambda: None
+
+    response = client.put('/api/settings/pager', json={
+        'gpio': 23,
+        'spi_bus': 1,
+        'spi_device': 0,
+        'power': '0xc0',
+        'repeats': 12,
+        'inverted': False,
+    })
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data['ok'] is True
+    assert data['pager']['power'] == 0xC0
+    assert data['pager']['repeats'] == 12
+    assert app.pager_service.config.power == 0xC0
+    assert stopped == [True]
+
+
+def test_pager_settings_endpoint_rejects_invalid_power():
+    app, client = setup_app()
+    app.settings = app.load_settings()
+    app.save_settings = lambda: None
+
+    response = client.put('/api/settings/pager', json={'power': 300})
+
+    assert response.status_code == 400
+    assert response.get_json()['ok'] is False

@@ -41,7 +41,7 @@ class PagerConfig:
     gpio: int = 24
     spi_bus: int = 0
     spi_device: int = 0
-    power: int = 0xC0
+    power: int = 0x60
     repeats: int = 30
     inverted: bool = True
     sender_script: Path | None = None
