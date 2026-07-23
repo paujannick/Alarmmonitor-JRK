@@ -338,8 +338,8 @@ if (vehicleTableEl && vehicleTableEl.tBodies && vehicleTableEl.tBodies[0] && 'Mu
     tableMutationObserver.observe(vehicleTableEl.tBodies[0], {childList: true, subtree: true, characterData: true});
 }
 function computeAlarmId(unit, info) {
-    const uniqueId = info.alarm_time || info.incident_id || Date.now();
-    return `${unit}:${uniqueId}`;
+    if (!info || !info.alarm_time) return null;
+    return `${unit}:${info.alarm_time}`;
 }
 
 function renderActiveIncidents(incidents) {
@@ -951,38 +951,33 @@ function processAnnouncements(list) {
 }
 
 function triggerAlarm(unit, info, alarmId) {
-    alarmId = alarmId || computeAlarmId(unit, info);
+    triggerAlarmGroup([{unit, info, alarmId: alarmId || computeAlarmId(unit, info)}]);
+}
+
+function triggerAlarmGroup(alerts) {
+    alerts = (alerts || []).filter(item => item && item.info && item.alarmId);
+    if (!alerts.length) return;
+    const alarmId = alerts.map(item => item.alarmId).join('|');
     if (alarmId === lastAlarmId) return;
     lastAlarmId = alarmId;
-    lastAlarmUnit = unit;
-    const displayCallsign = info.callsign || unit;
-    const speechCallsign = info.tts || displayCallsign;
-    const priority = info.priority || '';
-    const parts = [`Alarm für ${speechCallsign}`];
+    lastAlarmUnit = alerts.length === 1 ? alerts[0].unit : null;
+    const displayCallsigns = alerts.map(item => item.info.callsign || item.unit);
+    const speechCallsigns = alerts.map(item => item.info.tts || item.info.callsign || item.unit);
+    const firstInfo = alerts[0].info;
+    const priority = firstInfo.priority || '';
+    const parts = [`Alarm für ${speechCallsigns.join(', ')}`];
     if (priority) parts.push(priority);
-    if (info.note) parts.push(info.note);
-    if (info.location) parts.push(info.location);
+    if (firstInfo.note) parts.push(firstInfo.note);
+    if (firstInfo.location) parts.push(firstInfo.location);
     const speechText = parts.join('. ');
     const displayParts = [];
-    if (info.note) displayParts.push(info.note);
-    if (info.location) displayParts.push(info.location);
+    if (firstInfo.note) displayParts.push(firstInfo.note);
+    if (firstInfo.location) displayParts.push(firstInfo.location);
     const displayText = displayParts.join(' ').trim();
     const displayPriorityHtml = priority
         ? `<span class="badge bg-warning text-dark ms-2 me-3">${priority}</span>`
         : '';
-    enqueueAlarm({alarmId, displayCallsign, speechText, displayText, displayPriorityHtml});
-    if (info.lat && info.lon) {
-        if (vehicleMarkers[unit]) {
-            vehicleMarkers[unit].setLatLng([info.lat, info.lon]);
-            vehicleMarkers[unit].setIcon(getIcon(unit));
-            vehicleMarkers[unit].setTooltipContent(displayCallsign);
-        } else {
-            const marker = L.marker([info.lat, info.lon], {icon: getIcon(unit)}).addTo(map);
-            marker.bindPopup(displayCallsign);
-            marker.bindTooltip(displayCallsign, { permanent: true, direction: 'top', offset: [0, -12], className: 'vehicle-label' });
-            vehicleMarkers[unit] = marker;
-        }
-    }
+    enqueueAlarm({alarmId, displayCallsign: displayCallsigns.join(', '), speechText, displayText, displayPriorityHtml});
     fitMapToAll();
 }
 
@@ -1082,6 +1077,7 @@ async function refresh() {
         }
         const fetchedUnits = new Set(Object.keys(data));
 
+        const pendingAlarms = [];
         for (const [unit, info] of Object.entries(data)) {
             vehicleData[unit] = info;
             let row = existingRows.get(unit);
@@ -1107,9 +1103,9 @@ async function refresh() {
                 delete vehicleIcons[unit];
             }
             const hasAlertInfo = info.note || info.location;
-            const alarmId = (info.alarm_time || info.incident_id) ? computeAlarmId(unit, info) : null;
+            const alarmId = computeAlarmId(unit, info);
             if (alarmId && alarmId !== lastAlarmIds[unit]) {
-                triggerAlarm(unit, info, alarmId);
+                pendingAlarms.push({unit, info, alarmId});
             }
             if (lastAlarmUnit === unit && !hasAlertInfo) {
                 setLatestIncidentVisible(false);
@@ -1133,6 +1129,10 @@ async function refresh() {
                 map.removeLayer(vehicleMarkers[unit]);
                 delete vehicleMarkers[unit];
             }
+        }
+
+        if (pendingAlarms.length) {
+            triggerAlarmGroup(pendingAlarms);
         }
 
         if (tbody) {
