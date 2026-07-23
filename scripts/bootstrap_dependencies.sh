@@ -4,6 +4,7 @@ set -euo pipefail
 PROJECT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 VENV_DIR="${ALARMMONITOR_VENV:-$PROJECT_ROOT/venv}"
 SERVICE_NAME="${ALARMMONITOR_SERVICE_NAME:-alarmmonitor.service}"
+APT_UPDATED=0
 
 if command -v sudo >/dev/null 2>&1 && [[ ${EUID:-$(id -u)} -ne 0 ]]; then
   SUDO="sudo"
@@ -19,23 +20,47 @@ run_root() {
   fi
 }
 
-install_apt_dependencies() {
+apt_update_once() {
+  if [[ "$APT_UPDATED" -eq 0 ]]; then
+    run_root apt-get update
+    APT_UPDATED=1
+  fi
+}
+
+install_apt_package_group() {
+  local description="$1"
+  shift
+
   if ! command -v apt-get >/dev/null 2>&1; then
-    echo "apt-get nicht gefunden, überspringe Systempakete."
-    return
+    echo "apt-get nicht gefunden, überspringe $description."
+    return 1
   fi
 
-  echo "📦 Installiere System-Abhängigkeiten"
-  run_root apt-get update
-  run_root apt-get install -y \
+  echo "📦 Installiere $description"
+  apt_update_once
+  if run_root apt-get install -y "$@"; then
+    return 0
+  fi
+
+  echo "⚠️  $description konnte nicht vollständig per apt installiert werden; fahre fort." >&2
+  return 1
+}
+
+install_apt_dependencies() {
+  install_apt_package_group "Basis-System-Abhängigkeiten" \
     git \
     python3 \
     python3-pip \
     python3-venv \
+    network-manager || true
+
+  # Hardware-Pakete sind auf Raspberry Pi OS per apt verfügbar, aber nicht auf
+  # allen Debian/Ubuntu-Varianten. Ein Fehlschlag darf die Web-App-Installation
+  # nicht abbrechen; pip bzw. die Laufzeitprüfung übernehmen den Fallback.
+  install_apt_package_group "Pager-Hardware-Abhängigkeiten" \
     pigpio \
     python3-pigpio \
-    python3-spidev \
-    network-manager
+    python3-spidev || true
 }
 
 enable_spi_if_available() {
@@ -70,27 +95,28 @@ install_python_dependencies() {
   # shellcheck disable=SC1091
   source "$VENV_DIR/bin/activate"
   python -m pip install --upgrade pip setuptools wheel
-  python -m pip install -r "$PROJECT_ROOT/requirements.txt"
-  python - <<'PY_INSTALL' || python -m pip install pigpio spidev
-import importlib.util
-import sys
+  python -m pip install Flask
 
-missing = [module for module in ('pigpio', 'spidev') if importlib.util.find_spec(module) is None]
-sys.exit(1 if missing else 0)
-PY_INSTALL
-  python - <<'PY_CHECK'
-import importlib.util
-import sys
+  local hardware_package
+  for hardware_package in RPi.GPIO spidev pigpio; do
+    if ! python -m pip install "$hardware_package"; then
+      echo "⚠️  $hardware_package konnte nicht per pip installiert werden; prüfe apt/system-site-packages." >&2
+    fi
+  done
 
-missing = [module for module in ('pigpio', 'spidev') if importlib.util.find_spec(module) is None]
-if missing:
-    sys.exit(
-        'Folgende Pager-Hardware-Pythonpakete fehlen in der venv: '
-        + ', '.join(missing)
-        + '. Bitte auf dem Raspberry Pi ausführen: '
-        + 'sudo apt-get install -y pigpio python3-pigpio python3-spidev && ./install.sh'
-    )
+  local missing
+  missing=$(python - <<'PY_CHECK'
+import importlib.util
+
+print(' '.join(module for module in ('pigpio', 'spidev') if importlib.util.find_spec(module) is None))
 PY_CHECK
+)
+
+  if [[ -n "$missing" ]]; then
+    echo "⚠️  Pager-Hardware-Pythonpakete fehlen in der venv: $missing" >&2
+    echo "    Auf Raspberry Pi OS bitte prüfen: sudo apt-get install -y pigpio python3-pigpio python3-spidev" >&2
+    echo "    Die Web-Oberfläche kann trotzdem starten; nur Pager-Senden benötigt diese Pakete." >&2
+  fi
 }
 
 restart_alarmmonitor_if_installed() {
