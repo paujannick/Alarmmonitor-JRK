@@ -599,6 +599,16 @@ def save_announcements():
     notify_change()
 
 
+def incident_unit_was_alerted(incident, unit):
+    """Return whether a unit already received an alarm for this incident."""
+    if not incident or not unit:
+        return False
+    return any(
+        entry.get('unit') == unit and entry.get('status') == 'alarmiert'
+        for entry in incident.get('log', []) or []
+        if isinstance(entry, dict)
+    )
+
 def update_vehicle_incident_details(unit, incident, *, newly_assigned=False):
     info = vehicles.get(unit)
     if not info or not incident:
@@ -1274,12 +1284,7 @@ def api_alert_incident(inc_id):
                     continue
                 info = vehicles.get(unit)
                 already_assigned = unit in inc['vehicles']
-                already_active = (
-                    already_assigned
-                    and info is not None
-                    and info.get('incident_id') == inc_id
-                    and info.get('alarm_time')
-                )
+                already_active = incident_unit_was_alerted(inc, unit)
                 if already_active:
                     already.append(unit)
                     continue
