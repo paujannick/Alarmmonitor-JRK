@@ -3,12 +3,14 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 {% endblock %}
 {% block content %}
-<div class="dispatch-toolbar mb-4">
+<div class="dispatch-toolbar dispatch-command mb-4">
   <div>
     <h1 class="mb-1">Leitstellen Interface</h1>
     <p class="mb-0 text-white-50">Zentrale Übersicht und Einsatzsteuerung</p>
   </div>
-  <div class="d-flex flex-wrap gap-2">
+  <div class="dispatch-command__status" aria-label="Leitstellenstatus">
+    <span><strong>{{ vehicles|length }}</strong> Fahrzeuge</span>
+    <span><strong>{{ incidents|selectattr('active')|list|length }}</strong> aktiv</span>
     <button class="btn btn-danger btn-lg shadow" id="incident-new">Neuen Einsatz anlegen</button>
   </div>
 </div>
@@ -93,8 +95,13 @@
     </section>
 
     <section class="dispatch-tab-panel" id="dispatch-tab-map" data-dispatch-panel="map">
-      <div class="dispatch-section-header d-flex justify-content-between align-items-center mb-3"><div><p class="dispatch-section-kicker mb-1">Karte</p><h2 class="mb-0">Lagekarte</h2></div><button type="button" class="btn btn-outline-light btn-sm dispatch-popout" data-popout-panel="map">Als Fenster öffnen</button></div>
-      <div id="dispatch-overview-map" class="dispatch-overview-map" role="application" aria-label="Lagekarte der Leitstelle"></div>
+      <div class="dispatch-section-header dispatch-map-header d-flex justify-content-between align-items-center mb-3"><div><p class="dispatch-section-kicker mb-1">Karte</p><h2 class="mb-0">Lagekarte</h2><p class="mb-0 text-white-50">Gleiche Kartendarstellung wie auf dem Alarmmonitor – Fahrzeuge und Einsätze in einer Lageansicht.</p></div><button type="button" class="btn btn-outline-light btn-sm dispatch-popout" data-popout-panel="map">Als Fenster öffnen</button></div>
+      <div class="dispatch-map-frame">
+        <div class="dispatch-map-overlay" aria-hidden="true">
+          <span class="dispatch-map-overlay__dot"></span> Live-Lage
+        </div>
+        <div id="dispatch-overview-map" class="dispatch-overview-map" role="application" aria-label="Lagekarte der Leitstelle"></div>
+      </div>
     </section>
   </div>
 </div>
@@ -350,7 +357,17 @@ function renderOverviewMapMarkers() {
     const lat = Number(info.lat);
     const lon = Number(info.lon);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-    const marker = L.circleMarker([lat, lon], { radius: 8, color: '#0dcaf0', fillColor: '#0dcaf0', fillOpacity: 0.75 });
+    const markerOptions = info.icon
+      ? { icon: L.icon({ iconUrl: `/static/${info.icon}`, iconSize: [32, 32], iconAnchor: [16, 16] }) }
+      : {
+          radius: 9,
+          color: '#0dcaf0',
+          fillColor: '#0dcaf0',
+          fillOpacity: 0.85,
+          weight: 2,
+        };
+    const marker = info.icon ? L.marker([lat, lon], markerOptions) : L.circleMarker([lat, lon], markerOptions);
+    marker.bindTooltip(escapeHtml(unit), { permanent: true, direction: 'top', className: 'vehicle-label' });
     marker.bindPopup(`<strong>${escapeHtml(unit)}</strong><br>${escapeHtml(getStatusLabel(info.status))}<br>${escapeHtml(info.location || '')}`);
     marker.addTo(overviewMapLayer);
     bounds.push([lat, lon]);
