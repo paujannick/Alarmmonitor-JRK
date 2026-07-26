@@ -3,17 +3,40 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 {% endblock %}
 {% block content %}
-<div class="dispatch-toolbar dispatch-command mb-4">
-  <div>
-    <h1 class="mb-1">Leitstellen Interface</h1>
-    <p class="mb-0 text-white-50">Zentrale Übersicht und Einsatzsteuerung</p>
+<header class="dispatch-command mb-4">
+  <div class="dispatch-command__identity">
+    <span class="dispatch-command__eyebrow"><i aria-hidden="true"></i> Integrierte Leitstelle</span>
+    <h1 class="mb-1">Einsatzführung</h1>
+    <p class="mb-0 text-white-50">Live-Lage · Disposition · Einsatzdokumentation</p>
   </div>
-  <div class="dispatch-command__status" aria-label="Leitstellenstatus">
-    <span><strong>{{ vehicles|length }}</strong> Fahrzeuge</span>
-    <span><strong>{{ incidents|selectattr('active')|list|length }}</strong> aktiv</span>
-    <button class="btn btn-danger btn-lg shadow" id="incident-new">Neuen Einsatz anlegen</button>
+  <div class="dispatch-command__clock" aria-label="Aktuelle Leitstellenzeit">
+    <span id="dispatch-date">—</span>
+    <strong id="dispatch-clock">--:--:--</strong>
+    <small>MESZ · Systemzeit</small>
   </div>
-</div>
+  <button class="btn btn-danger btn-lg dispatch-primary-action" id="incident-new">
+    <span aria-hidden="true">＋</span> Einsatz eröffnen
+  </button>
+</header>
+
+<section class="dispatch-kpis mb-4" aria-label="Operative Kennzahlen">
+  <article class="dispatch-kpi dispatch-kpi--critical">
+    <span class="dispatch-kpi__icon" aria-hidden="true">!</span>
+    <div><small>Offene Einsätze</small><strong id="dispatch-active-count">{{ incidents|selectattr('active')|list|length }}</strong><span>laufende Lagen</span></div>
+  </article>
+  <article class="dispatch-kpi dispatch-kpi--ready">
+    <span class="dispatch-kpi__icon" aria-hidden="true">✓</span>
+    <div><small>Einsatzbereit</small><strong id="dispatch-ready-count">{{ available.values()|select|list|length }}</strong><span>Status 1 / 2</span></div>
+  </article>
+  <article class="dispatch-kpi">
+    <span class="dispatch-kpi__icon" aria-hidden="true">⌁</span>
+    <div><small>Im Einsatz</small><strong id="dispatch-bound-count">{{ vehicles|length - available.values()|select|list|length }}</strong><span>gebundene Kräfte</span></div>
+  </article>
+  <article class="dispatch-kpi dispatch-kpi--system">
+    <span class="dispatch-kpi__pulse" aria-hidden="true"></span>
+    <div><small>Systemstatus</small><strong>ONLINE</strong><span>Live-Synchronisierung aktiv</span></div>
+  </article>
+</section>
 
 <div class="alert alert-danger d-none" role="alert" id="dispatch-status-error"></div>
 
@@ -32,7 +55,17 @@
           <p class="dispatch-section-kicker mb-1">Fahrzeuge</p>
           <h2 class="mb-0">Fahrzeugübersicht</h2>
         </div>
-        <div class="d-flex flex-wrap gap-2">
+        <div class="dispatch-board-tools">
+          <label class="dispatch-search" for="vehicle-search">
+            <span aria-hidden="true">⌕</span>
+            <input type="search" id="vehicle-search" placeholder="Fahrzeug, Funkrufname oder Ort" autocomplete="off">
+          </label>
+          <select class="dispatch-filter" id="vehicle-filter" aria-label="Fahrzeuge nach Verfügbarkeit filtern">
+            <option value="all">Alle Kräfte</option>
+            <option value="ready">Einsatzbereit</option>
+            <option value="bound">Gebunden</option>
+            <option value="incident">Im Einsatz</option>
+          </select>
           <button type="button" class="btn btn-outline-light btn-sm dispatch-popout" data-popout-panel="vehicles">Als Fenster öffnen</button>
           <button type="button" class="btn btn-outline-light btn-sm" id="vehicle-board-toggle" aria-expanded="true">Übersicht einklappen</button>
         </div>
@@ -264,6 +297,10 @@ const statusBoard = document.getElementById('dispatch-vehicle-board');
 const statusError = document.getElementById('dispatch-status-error');
 const boardContainer = document.getElementById('vehicle-board-container');
 const boardToggle = document.getElementById('vehicle-board-toggle');
+const vehicleSearch = document.getElementById('vehicle-search');
+const vehicleFilter = document.getElementById('vehicle-filter');
+const readyCountEl = document.getElementById('dispatch-ready-count');
+const boundCountEl = document.getElementById('dispatch-bound-count');
 const incidentToolbarButton = document.getElementById('incident-new');
 const announcementInput = document.getElementById('announcement-text');
 const announcementSendBtn = document.getElementById('announcement-send');
@@ -855,6 +892,36 @@ function updateAvailabilityData() {
     const isAvailable = (status === 1 || status === 2) && !info.incident_id;
     availableData[unit] = isAvailable;
   });
+  updateDispatchMetrics();
+}
+
+function updateDispatchMetrics() {
+  const entries = Object.values(vehiclesData);
+  const ready = entries.filter(info => {
+    const status = Number(info.status);
+    return (status === 1 || status === 2) && !info.incident_id;
+  }).length;
+  if (readyCountEl) readyCountEl.textContent = String(ready);
+  if (boundCountEl) boundCountEl.textContent = String(Math.max(0, entries.length - ready));
+}
+
+function applyVehicleFilters() {
+  if (!statusBoard) return;
+  const query = (vehicleSearch?.value || '').trim().toLocaleLowerCase('de-DE');
+  const filter = vehicleFilter?.value || 'all';
+  statusBoard.querySelectorAll('.dispatch-card').forEach(card => {
+    const info = vehiclesData[card.dataset.unit] || {};
+    const status = Number(info.status);
+    const isReady = (status === 1 || status === 2) && !info.incident_id;
+    const haystack = [card.dataset.unit, info.name, info.callsign, info.location]
+      .filter(Boolean).join(' ').toLocaleLowerCase('de-DE');
+    const matchesText = !query || haystack.includes(query);
+    const matchesState = filter === 'all' ||
+      (filter === 'ready' && isReady) ||
+      (filter === 'bound' && !isReady) ||
+      (filter === 'incident' && Boolean(info.incident_id));
+    card.hidden = !(matchesText && matchesState);
+  });
 }
 
 function updateDispatchCard(card, info) {
@@ -989,6 +1056,7 @@ function renderVehicleBoard() {
     const card = createDispatchCard(unit, info);
     statusBoard.appendChild(card);
   });
+  applyVehicleFilters();
 }
 
 async function refreshVehicles() {
@@ -1572,6 +1640,24 @@ document.querySelectorAll('#incident-list .delete').forEach(btn => {
     }
   });
 });
+
+function updateDispatchClock() {
+  const now = new Date();
+  const clock = document.getElementById('dispatch-clock');
+  const date = document.getElementById('dispatch-date');
+  if (clock) clock.textContent = now.toLocaleTimeString('de-DE', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  });
+  if (date) date.textContent = now.toLocaleDateString('de-DE', {
+    weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
+  });
+}
+
+vehicleSearch?.addEventListener('input', applyVehicleFilters);
+vehicleFilter?.addEventListener('change', applyVehicleFilters);
+updateDispatchMetrics();
+updateDispatchClock();
+setInterval(updateDispatchClock, 1000);
 
 const evtSource = new EventSource('/events');
 evtSource.onmessage = () => {
